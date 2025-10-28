@@ -79,9 +79,9 @@ svg{width:100%;height:100%;touch-action:none}
     </div>
   </div>
   <aside class="desc">
-    <h1>Change of Basis – Interactive Illustration</h1>
+    <h3>Change of Basis</h3>
     <div class="readout">
-      <header>Map matrices</header>
+      <header>Eigenvalues</header>
       <div id="eigs"></div>
       <div id="matrix"></div>
       <div id="rows"></div>
@@ -214,7 +214,7 @@ function renderMatrix() {
   const r1 = document.createElement('div');
   r1.className = 'row';
   r1.innerHTML = `
-   \\( M(I,\\, w,\\, v) = \\begin{bmatrix} 
+   \\( C^{-1} = M(I,\\, w,\\, v) = \\begin{bmatrix} 
     ${fmtQ(I_wv[0][0])} & ${fmtQ(I_wv[0][1])} \\\\ 
     ${fmtQ(I_wv[1][0])} & ${fmtQ(I_wv[1][1])} 
     \\end{bmatrix} \\)
@@ -225,7 +225,7 @@ function renderMatrix() {
   const r2 = document.createElement('div');
   r2.className = 'row';
   r2.innerHTML = `
-    \\( M(T,\\, v,\\, v) = \\begin{bmatrix} 
+    \\( B = M(T,\\, v,\\, v) = \\begin{bmatrix} 
     ${fmtQ(M_T_vv[0][0])} & ${fmtQ(M_T_vv[0][1])} \\\\ 
     ${fmtQ(M_T_vv[1][0])} & ${fmtQ(M_T_vv[1][1])} 
     \\end{bmatrix} \\)
@@ -246,7 +246,7 @@ function renderMatrix() {
   const r4 = document.createElement('div');
   r4.className = 'row';
   r4.innerHTML = `
-    \\( M(I,\\, v,\\, w) = \\begin{bmatrix} 
+    \\( C = M(I,\\, v,\\, w) = \\begin{bmatrix} 
     ${fmtQ(I_vw[0][0])} & ${fmtQ(I_vw[0][1])} \\\\ 
     ${fmtQ(I_vw[1][0])} & ${fmtQ(I_vw[1][1])} 
     \\end{bmatrix} \\)
@@ -256,7 +256,7 @@ function renderMatrix() {
   const r5 = document.createElement('div');
   r5.className = 'row';
   r5.innerHTML = `
-     \\( M(T,\\, v,\\, w) = \\begin{bmatrix} 
+     \\( A =  M(T,\\, v,\\, w) = \\begin{bmatrix} 
     ${fmtQ(a)} & ${fmtQ(b)} \\\\ 
     ${fmtQ(c)} & ${fmtQ(d)} 
     \\end{bmatrix} \\)
