@@ -246,7 +246,7 @@ function renderMatrix() {
   const r4 = document.createElement('div');
   r4.className = 'row';
   r4.innerHTML = `
-    \\( M(<!I,\\, v,\\, w) = \\begin{bmatrix} 
+    \\( M(I,\\, v,\\, w) = \\begin{bmatrix} 
     ${fmtQ(I_vw[0][0])} & ${fmtQ(I_vw[0][1])} \\\\ 
     ${fmtQ(I_vw[1][0])} & ${fmtQ(I_vw[1][1])} 
     \\end{bmatrix} \\)
