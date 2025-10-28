@@ -1,0 +1,309 @@
+doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Change of Basis – Interactive Plane</title>
+<style>
+:root{
+  --bg:#f5f6f8; --plane:#f2f3f5; --grid:#d9dee5; --text:#222;
+  --blue:#1d4ed8; --blue-soft:#dbeafe; --blue-dark:#1e40af;
+  --cyan:#10b981; --cyan-soft:#d1fae5; --cyan-dark:#047857;
+  --red:#ef4444; --std-soft:#e5e7eb;
+}
+html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
+.app{display:grid;grid-template-columns:1fr 380px;height:100vh}
+.plane-wrap{background:var(--plane)}
+.plane-area{position:relative;height:100%}
+svg{width:100%;height:100%;touch-action:none}
+.desc{border-left:1px solid #e5e7eb;padding:16px;overflow:auto}
+.readout{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-top:10px}
+.row{display:flex;align-items:center;gap:6px;margin:6px 0}
+.coord{background:#f3f4f6;border-radius:8px;padding:2px 6px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;cursor:text}
+.coord.editing{padding:0}
+.coord input{border:none;outline:none;background:transparent;font:inherit;padding:4px 8px;width:120px}
+.coord-vec{display:inline-flex;flex-direction:column;align-items:center;font-size:.7em;line-height:1.05}
+.hint{font-size:12px;color:#6b7280;margin-top:6px}
+.plane-ui{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;background:#fff;padding:8px;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.btn{font:inherit;font-size:13px;border:1px solid #e5e7eb;padding:6px 10px;border-radius:8px;cursor:pointer}
+.btn-std{background:var(--std-soft)}
+.btn-v{background:var(--blue-soft);color:var(--blue-dark);font-weight:700}
+.btn-w{background:var(--cyan-soft);color:var(--cyan-dark);font-weight:700}
+.grid line{stroke:var(--grid);stroke-width:1}
+.grid-v line{stroke:var(--blue);stroke-width:1}
+.grid-w line{stroke:var(--cyan);stroke-width:1}
+.arrow{stroke-width:3;fill:none}
+.label{font-size:18px;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:3px;dominant-baseline:middle}
+.outline{stroke:var(--cyan);stroke-width:7;fill:none}
+.origin-dot{fill:#555}
+.hit{stroke:rgba(0,0,0,0);stroke-width:24;pointer-events:all;cursor:grab}
+.p-arrow{fill:rgba(239,68,68,0.18);stroke:var(--red);stroke-width:2.5}
+.tp-arrow{fill:rgba(16,185,129,0.12);stroke:var(--cyan);stroke-width:3}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="plane-wrap">
+    <div class="plane-area">
+      <svg id="plane" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arrowhead-blue" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L10,5 L0,10 Z" fill="var(--blue)"></path>
+          </marker>
+          <marker id="arrowhead-cyan" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L10,5 L0,10 Z" fill="var(--cyan)"></path>
+          </marker>
+          <clipPath id="clipArea"><rect x="0" y="0" width="800" height="800"/></clipPath>
+        </defs>
+        <g id="scene">
+          <g class="grid" id="grid_std" clip-path="url(#clipArea)"></g>
+          <g class="grid-v" id="grid_v" clip-path="url(#clipArea)"></g>
+          <g class="grid-w" id="grid_w" clip-path="url(#clipArea)"></g>
+          <circle id="origin" class="origin-dot" r="4" cx="400" cy="400"></circle>
+          <g id="v1" data-color="blue"></g>
+          <g id="v2" data-color="blue"></g>
+          <g id="w1" data-color="cyan"></g>
+          <g id="w2" data-color="cyan"></g>
+          <g id="Tv1" data-color="blue" data-outline="cyan"></g>
+          <g id="Tv2" data-color="blue" data-outline="cyan"></g>
+          <g id="Pgroup"></g>
+          <g id="TPgroup"></g>
+        </g>
+      </svg>
+      <div class="plane-ui">
+        <button id="resetBtn" class="btn">Reset</button>
+        <button id="btnStd" class="btn btn-std" title="Toggle standard grid">Std</button>
+        <button id="btnV" class="btn btn-v" title="Toggle v-grid">v</button>
+        <button id="btnW" class="btn btn-w" title="Toggle w-grid">w</button>
+      </div>
+    </div>
+  </div>
+  <aside class="desc">
+    <h1>Change of Basis – Interactive Illustration</h1>
+    <div class="readout">
+      <header>Map matrices</header>
+      <div id="eigs"></div>
+      <div id="matrix"></div>
+      <div id="rows"></div>
+      <div class="hint">Click any coordinate to edit (integers). Separate by a comma or space.</div>
+    </div>
+  </aside>
+</div>
+<script>
+// ===== coordinate transforms =====
+const SVG_SIZE=800; const R=10; const O=SVG_SIZE/2; const SCALE=SVG_SIZE/(2*R);
+function toPxX(x){return O + x*SCALE;} function toPxY(y){return O - y*SCALE;}
+const plane=document.getElementById('plane');
+function clientToSvgPoint(evt){ let spx=evt.clientX, spy=evt.clientY; const m=plane.getScreenCTM(); if(plane.createSVGPoint&&m){ const pt=plane.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY; const inv=m.inverse(); const sp=pt.matrixTransform(inv); spx=sp.x; spy=sp.y; } return {x:spx,y:spy}; }
+function svgPxToUnits(px){ return {x:(px.x-O)/SCALE, y:(O-px.y)/SCALE}; }
+
+// ===== grids =====
+const gridStd=document.getElementById('grid_std');
+const gridV=document.getElementById('grid_v');
+const gridW=document.getElementById('grid_w');
+function drawStdGrid(){ gridStd.innerHTML=''; for(let i=-R;i<=R;i++){ const v=document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('x1',toPxX(i)); v.setAttribute('y1',toPxY(-R)); v.setAttribute('x2',toPxX(i)); v.setAttribute('y2',toPxY(R)); gridStd.appendChild(v); const h=document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('x1',toPxX(-R)); h.setAttribute('y1',toPxY(i)); h.setAttribute('x2',toPxX(R)); h.setAttribute('y2',toPxY(i)); gridStd.appendChild(h);} }
+function drawBasisGrid(b1,b2,group){ group.innerHTML=''; const x1=b1.x,y1=b1.y,x2=b2.x,y2=b2.y; const det=x1*y2 - y1*x2; if(Math.abs(det)<1e-6) return; const range=R*1.25,M=12,T=range*3; for(let k=-M;k<=M;k++){ const ax=k*x2 - T*x1, ay=k*y2 - T*y1; const bx=k*x2 + T*x1, by=k*y2 + T*y1; const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',toPxX(ax)); line.setAttribute('y1',toPxY(ay)); line.setAttribute('x2',toPxX(bx)); line.setAttribute('y2',toPxY(by)); group.appendChild(line);} for(let k=-M;k<=M;k++){ const ax=k*x1 - T*x2, ay=k*y1 - T*y2; const bx=k*x1 + T*x2, by=k*y1 + T*y2; const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',toPxX(ax)); line.setAttribute('y1',toPxY(ay)); line.setAttribute('x2',toPxX(bx)); line.setAttribute('y2',toPxY(by)); group.appendChild(line);} }
+
+// ===== state =====
+const initState={ v1:{x:4,y:0}, v2:{x:0,y:4}, w1:{x:-1,y:-1}, w2:{x:-1,y:0}, Tv1:{x:1,y:2}, Tv2:{x:0,y:1}, P:{x:2,y:2} };
+const state=JSON.parse(JSON.stringify(initState));
+const tvWeights={Tv1:{a:0,b:0}, Tv2:{a:0,b:0}};
+
+// ===== vectors =====
+function makeVectorGroup(id){ const g=document.getElementById(id); g.innerHTML=''; const isBlue=(g.dataset.color==='blue'); const color=isBlue?'var(--blue)':'var(--cyan)'; const outlineColor=g.dataset.outline? 'var(--cyan)':null; const outline=outlineColor?document.createElementNS('http://www.w3.org/2000/svg','path'):null; if(outline){ outline.setAttribute('class','outline'); outline.setAttribute('stroke',outlineColor); g.appendChild(outline);} const line=document.createElementNS('http://www.w3.org/2000/svg','path'); line.setAttribute('class','arrow'); line.setAttribute('stroke',color); line.setAttribute('marker-end', isBlue? 'url(#arrowhead-blue)':'url(#arrowhead-cyan)'); const hit=document.createElementNS('http://www.w3.org/2000/svg','line'); hit.setAttribute('class','hit'); const label=document.createElementNS('http://www.w3.org/2000/svg','text'); label.setAttribute('class','label hit'); label.setAttribute('fill',color); g.appendChild(line); g.appendChild(hit); g.appendChild(label); return {g,outline,line,label,hit}; }
+const vectors={ v1:makeVectorGroup('v1'), v2:makeVectorGroup('v2'), w1:makeVectorGroup('w1'), w2:makeVectorGroup('w2'), Tv1:makeVectorGroup('Tv1'), Tv2:makeVectorGroup('Tv2') };
+
+function setPath(p,x1,y1,x2,y2){ p.setAttribute('d',`M ${x1} ${y1} L ${x2} ${y2}`); }
+function updateVector(id){ const node=state[id]; if(!node){ return; } const {x,y}=node; const {outline,line,label,hit}=vectors[id]; const x1=toPxX(0), y1=toPxY(0), x2=toPxX(x), y2=toPxY(y); if(outline) setPath(outline,x1,y1,x2,y2); setPath(line,x1,y1,x2,y2); const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1; const ux=dx/len, uy=dy/len; const L=36, F=0; const hx1=x2-ux*L, hy1=y2-uy*L, hx2=x2+ux*F, hy2=y2+uy*F; hit.setAttribute('x1',hx1); hit.setAttribute('y1',hy1); hit.setAttribute('x2',hx2); hit.setAttribute('y2',hy2); // label at tip + 0.8*height along arrow
+  label.textContent=id; const labelHeight=18; const offset=0.8*labelHeight; const lblx=x2 + ux*offset; const lbly=y2 + uy*offset; label.setAttribute('x',lblx); label.setAttribute('y',lbly); label.setAttribute('text-anchor','middle'); }
+
+// ===== P shape (asymmetric, shaft + aligned semicircle at tip base) =====
+const Pgroup=document.getElementById('Pgroup'); const TPgroup=document.getElementById('TPgroup');
+const Ppath=document.createElementNS('http://www.w3.org/2000/svg','path'); Ppath.setAttribute('class','p-arrow'); Pgroup.appendChild(Ppath);
+const Phit=document.createElementNS('http://www.w3.org/2000/svg','line'); Phit.setAttribute('class','hit'); Pgroup.appendChild(Phit);
+const TPpath=document.createElementNS('http://www.w3.org/2000/svg','path'); TPpath.setAttribute('class','tp-arrow'); TPgroup.appendChild(TPpath);
+
+function worldToPx(pt){ return {x:toPxX(pt.x), y:toPxY(pt.y)}; }
+function samplePWorld(Px,Py){ const L=Math.hypot(Px,Py)||1; const t={x:Px/L,y:Py/L}; const n={x:-t.y,y:t.x}; const head=Math.min(0.8,0.18*L); const base={x:Px - t.x*head, y:Py - t.y*head}; const r=head*0.5; const center={x:base.x + t.x*r, y:base.y + t.y*r}; const N=36; const arc=[]; for(let i=0;i<=N;i++){ const th=Math.PI - Math.PI*(i/N); const px=center.x + Math.cos(th)*t.x*r + Math.sin(th)*n.x*r; const py=center.y + Math.cos(th)*t.y*r + Math.sin(th)*n.y*r; arc.push({x:px,y:py}); } return {shaft:[{x:0,y:0}, base], arc}; }
+function buildPPathD(Px,Py){ const {shaft,arc}=samplePWorld(Px,Py); const S=shaft.map(worldToPx); const A=arc.map(worldToPx); let d=`M ${S[0].x} ${S[0].y} L ${S[1].x} ${S[1].y}`; d+=` M ${A[0].x} ${A[0].y}`; for(let i=1;i<A.length;i++){ d+=` L ${A[i].x} ${A[i].y}`;} return d; }
+
+// ===== linear algebra helpers =====
+function inv2(M){ const a=M[0][0],b=M[0][1],c=M[1][0],d=M[1][1]; const det=a*d-b*c; if(Math.abs(det)<1e-9) return [[NaN,NaN],[NaN,NaN]]; const s=1/det; return [[d*s,-b*s],[-c*s,a*s]]; }
+function mul2(A,B){ return [[A[0][0]*B[0][0]+A[0][1]*B[1][0], A[0][0]*B[0][1]+A[0][1]*B[1][1]],[A[1][0]*B[0][0]+A[1][1]*B[1][0], A[1][0]*B[0][1]+A[1][1]*B[1][1]]]; }
+function getV(){ return [[state.v1.x,state.v2.x],[state.v1.y,state.v2.y]]; }
+function getW(){ return [[state.w1.x,state.w2.x],[state.w1.y,state.w2.y]]; }
+function currentTstd(){ const V=getV(), W=getW(), Vinv=inv2(V); const a=tvWeights.Tv1.a, b=tvWeights.Tv2.a, c=tvWeights.Tv1.b, d=tvWeights.Tv2.b; const A=[[a,b],[c,d]]; return mul2(W, mul2(A, Vinv)); }
+function applyTStd(pt){ const T=currentTstd(); return {x:T[0][0]*pt.x + T[0][1]*pt.y, y:T[1][0]*pt.x + T[1][1]*pt.y}; }
+function buildTPPathD(Px,Py){ const {shaft,arc}=samplePWorld(Px,Py); const tS=shaft.map(applyTStd).map(worldToPx); const tA=arc.map(applyTStd).map(worldToPx); let d=`M ${tS[0].x} ${tS[0].y} L ${tS[1].x} ${tS[1].y}`; d+=` M ${tA[0].x} ${tA[0].y}`; for(let i=1;i<tA.length;i++){ d+=` L ${tA[i].x} ${tA[i].y}`;} return d; }
+
+// snapping helpers
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function inverseCoeffs(vec,b1,b2){ const det=b1.x*b2.y - b1.y*b2.x; if(Math.abs(det)<1e-8) return null; const a=(vec.x*b2.y - vec.y*b2.x)/det; const b=(-vec.x*b1.y + vec.y*b1.x)/det; return {a,b}; }
+function snapToStd(id){ const node=state[id]; if(!node){ return {x:0,y:0,coeff:[0,0]}; } const nx=Math.round(node.x), ny=Math.round(node.y); if(nx===0 && ny===0){ const cand=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]; const vx=node.x, vy=node.y; let best=[1,0],bestD=1e9; for(const [cx,cy] of cand){ const d=(cx-vx)**2 + (cy-vy)**2; if(d<bestD){bestD=d; best=[cx,cy];}} return {x:best[0],y:best[1],coeff:best}; } return {x:nx,y:ny,coeff:[nx,ny]}; }
+function snapToBasis(vec,b1,b2,allowZero){ const res=inverseCoeffs(vec,b1,b2); if(!res) return {x:vec.x,y:vec.y,coeff:[0,0]}; let ar=Math.round(res.a), br=Math.round(res.b); if(!allowZero && ar===0 && br===0){ const cand=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]; let best=[1,0],bestD=1e9; for(const [m,n] of cand){ const px=m*b1.x + n*b2.x - vec.x; const py=m*b1.y + n*b2.y - vec.y; const d=px*px+py*py; if(d<bestD){bestD=d; best=[m,n];}} ar=best[0]; br=best[1]; } return {x:ar*b1.x + br*b2.x, y:ar*b1.y + br*b2.y, coeff:[ar,br]}; }
+
+function initTvWeights(){ const w1=state.w1, w2=state.w2; ['Tv1','Tv2'].forEach(id=>{ const res=inverseCoeffs(state[id],w1,w2); tvWeights[id]=res?{a:res.a,b:res.b}:{a:0,b:0}; }); }
+function recomputeTvWeights(){ const w1=state.w1, w2=state.w2; ['Tv1','Tv2'].forEach(id=>{ const res=inverseCoeffs(state[id],w1,w2); if(res){ tvWeights[id]={a:res.a,b:res.b}; }}); }
+
+// pointer interactions (robust against non-vector hits)
+let dragTarget=null;
+const VECTOR_IDS=new Set(['v1','v2','w1','w2','Tv1','Tv2']);
+function onPointerDown(e){
+  const t=e.target; const g=t.parentNode;
+  // prioritize P before generic hit logic
+  if(t===Phit || t===Ppath){ dragTarget='P'; if(Phit.setPointerCapture&&e.pointerId!=null) Phit.setPointerCapture(e.pointerId); return; }
+  if(t.classList && t.classList.contains('hit') && g && VECTOR_IDS.has(g.id)){
+    dragTarget=g.id; if(t.setPointerCapture&&e.pointerId!=null) t.setPointerCapture(e.pointerId); return;
+  }
+}
+function onPointerMove(e){ if(!dragTarget) return; const pt=svgPxToUnits(clientToSvgPoint(e)); if(dragTarget==='P'){ state.P.x=clamp(pt.x,-R,R); state.P.y=clamp(pt.y,-R,R); updateP(); updateTP(); return; } if(!state[dragTarget]) return; state[dragTarget].x=clamp(pt.x,-R,R); state[dragTarget].y=clamp(pt.y,-R,R); if(dragTarget==='Tv1'||dragTarget==='Tv2'){ const res=inverseCoeffs(state[dragTarget], state.w1, state.w2); if(res) tvWeights[dragTarget]={a:res.a,b:res.b}; } if(dragTarget==='w1'||dragTarget==='w2'){ recomputeTvWeights(); }
+  updateAll(); }
+function onPointerUp(){ if(!dragTarget) return; if(dragTarget==='P'){ dragTarget=null; return; } if(!state[dragTarget]){ dragTarget=null; return; } if(dragTarget==='v1'||dragTarget==='v2'){ const dest=snapToStd(dragTarget); animateSnap(dragTarget,dest,dest.coeff,'blue', updateAll); } else if(dragTarget==='w1'||dragTarget==='w2'){ const dest=snapToStd(dragTarget); animateSnap(dragTarget,dest,dest.coeff,null,()=>{recomputeTvWeights(); updateAll();}); } else if(dragTarget==='Tv1'||dragTarget==='Tv2'){ const dest=snapToBasis(state[dragTarget],state.w1,state.w2,true); tvWeights[dragTarget]={a:dest.coeff[0],b:dest.coeff[1]}; animateSnap(dragTarget,dest,dest.coeff,'Tv',()=>{ tvWeights[dragTarget]={a:dest.coeff[0],b:dest.coeff[1]}; updateAll();}); } dragTarget=null; }
+plane.addEventListener('pointerdown',onPointerDown); plane.addEventListener('pointermove',onPointerMove); plane.addEventListener('pointerup',onPointerUp); window.addEventListener('pointerup',onPointerUp);
+
+// minimal tag (placeholder to keep API)
+function showTag(){}
+function animateSnap(id,dest,coeff,type,onDone){ const node=state[id]; if(!node){ if(typeof onDone==='function') onDone(); return; } const start={x:node.x,y:node.y}; const dx=dest.x-start.x, dy=dest.y-start.y; const t0=performance.now(); const dur=180; function ease(t){return t<.5?2*t*t:-1+(4-2*t)*t;} function frame(now){ const p=Math.min(1,(now-t0)/dur); const e=ease(p); node.x=start.x+dx*e; node.y=start.y+dy*e; updateVector(id); if(p<1){ requestAnimationFrame(frame);} else{ node.x=dest.x; node.y=dest.y; updateVector(id); if(typeof onDone==='function') onDone(); if(flags.v) drawBasisGrid(state.v1,state.v2,gridV); if(flags.w) drawBasisGrid(state.w1,state.w2,gridW); updateTP(); renderReadout(); } } requestAnimationFrame(frame); }
+
+// inline editing (vectors + Tv weights)
+const rows=document.getElementById('rows'); const matrixEl=document.getElementById('matrix'); const eigsEl=document.getElementById('eigs');
+function badgeSpan(text){ const s=document.createElement('span'); s.style.background='var(--blue-soft)'; s.style.color='var(--blue-dark)'; s.style.fontWeight='800'; s.style.padding='2px 6px'; s.style.borderRadius='8px'; s.textContent=text; return s; }
+function fmt2(x){ const v=Math.round(x*100)/100; return (Math.abs(v)<1e-12?0:v).toFixed(2); }
+function _gcd(a,b){ a=Math.trunc(Math.abs(a)); b=Math.trunc(Math.abs(b)); while(b){ const t=a%b; a=b; b=t; } return a||1; }
+function toFraction(x,maxDen=99,tol=1e-12){ if(!isFinite(x)) return {n:0,d:1,invalid:true}; if(Math.abs(x)<tol) return {n:0,d:1}; const sign=x<0?-1:1; x=Math.abs(x); let a0=Math.floor(x); let h1=1,k1=0,h0=a0,k0=1; let b=x-a0; if(b<tol){ const g=_gcd(h0,k0); return {n:sign*(h0/g), d:k0/g}; } while(b>tol){ b=1/b; let a=Math.floor(b); let nextK=a*k0 + k1; if(nextK>maxDen){ const aCap=Math.floor((maxDen-k1)/k0); if(aCap<=0) break; a=aCap; nextK=a*k0 + k1; } const nextH=a*h0 + h1; h1=h0; k1=k0; h0=nextH; k0=nextK; const err=Math.abs(x - h0/k0); if(err<tol || k0>=maxDen) break; b=b-a; } const g=_gcd(h0,k0); return {n:sign*(h0/g), d:k0/g}; }
+function fmtQ(x){ if(!isFinite(x)) return '–'; const f=toFraction(x,99,1e-12); return f.d===1? String(f.n) : `${f.n}/${f.d}`; }
+
+// ==============================
+// ========== MATRICES ==========
+// LaTeX/MathJax block: edit here if you want to tweak how matrices render.
+// ==============================
+function renderMatrix() {
+  matrixEl.innerHTML = '';
+  eigsEl.innerHTML = '';
+
+  const V = getV(), W = getW(), Vinv = inv2(V), Winv = inv2(W);
+  const I_vw = mul2(Winv, V), I_wv = mul2(Vinv, W);
+  const Tstd = currentTstd();
+  const tr = Tstd[0][0] + Tstd[1][1];
+  const det = Tstd[0][0] * Tstd[1][1] - Tstd[0][1] * Tstd[1][0];
+  const disc = tr * tr - 4 * det;
+
+  const eigRow = document.createElement('div');
+  eigRow.className = 'row';
+
+  if (disc < 0) {
+    const re = tr / 2, im = Math.sqrt(-disc) / 2;
+    eigRow.innerHTML = `
+      \\( \\lambda_1 = ${fmt2(re)} + ${fmt2(im)}\\,i ,\\; 
+      \\lambda_2 = ${fmt2(re)} - ${fmt2(im)}\\,i \\)
+    `;
+  } else {
+    const s = Math.sqrt(disc);
+    const l1 = 0.5 * (tr + s), l2 = 0.5 * (tr - s);
+    eigRow.innerHTML = `
+      \\( \\lambda_1 = ${fmt2(l1)} ,\\; 
+      \\lambda_2 = ${fmt2(l2)} \\)
+    `;
+  }
+  eigsEl.appendChild(eigRow);
+
+  const a = tvWeights.Tv1.a, b = tvWeights.Tv2.a;
+  const c = tvWeights.Tv1.b, d = tvWeights.Tv2.b;
+  const A_vw = [[a, b], [c, d]];
+
+  const r1 = document.createElement('div');
+  r1.className = 'row';
+  r1.innerHTML = `
+   \\( M(I,\\, w,\\, v) = \\begin{bmatrix} 
+    ${fmtQ(I_wv[0][0])} & ${fmtQ(I_wv[0][1])} \\\\ 
+    ${fmtQ(I_wv[1][0])} & ${fmtQ(I_wv[1][1])} 
+    \\end{bmatrix} \\)
+  `;
+  matrixEl.appendChild(r1);
+
+  const M_T_vv = mul2(I_wv, A_vw);
+  const r2 = document.createElement('div');
+  r2.className = 'row';
+  r2.innerHTML = `
+    \\( M(T,\\, v,\\, v) = \\begin{bmatrix} 
+    ${fmtQ(M_T_vv[0][0])} & ${fmtQ(M_T_vv[0][1])} \\\\ 
+    ${fmtQ(M_T_vv[1][0])} & ${fmtQ(M_T_vv[1][1])} 
+    \\end{bmatrix} \\)
+  `;
+  matrixEl.appendChild(r2);
+
+  const M_T_ww = mul2(A_vw, I_wv);
+  const r3 = document.createElement('div');
+  r3.className = 'row';
+  r3.innerHTML = `
+    \\( M(T,\\, w,\\, w) = \\begin{bmatrix} 
+    ${fmtQ(M_T_ww[0][0])} & ${fmtQ(M_T_ww[0][1])} \\\\ 
+    ${fmtQ(M_T_ww[1][0])} & ${fmtQ(M_T_ww[1][1])} 
+    \\end{bmatrix} \\)
+  `;
+  matrixEl.appendChild(r3);
+
+  const r4 = document.createElement('div');
+  r4.className = 'row';
+  r4.innerHTML = `
+    \\( M(<!I,\\, v,\\, w) = \\begin{bmatrix} 
+    ${fmtQ(I_vw[0][0])} & ${fmtQ(I_vw[0][1])} \\\\ 
+    ${fmtQ(I_vw[1][0])} & ${fmtQ(I_vw[1][1])} 
+    \\end{bmatrix} \\)
+  `;
+  matrixEl.appendChild(r4);
+
+  const r5 = document.createElement('div');
+  r5.className = 'row';
+  r5.innerHTML = `
+     \\( M(T,\\, v,\\, w) = \\begin{bmatrix} 
+    ${fmtQ(a)} & ${fmtQ(b)} \\\\ 
+    ${fmtQ(c)} & ${fmtQ(d)} 
+    \\end{bmatrix} \\)
+  `;
+  matrixEl.appendChild(r5);
+
+  if (window.MathJax) {
+    MathJax.typesetPromise([eigsEl, matrixEl]);
+  }
+}
+
+function renderRow(id,color){ const row=document.createElement('div'); row.className='row'; if(/^Tv[12]$/.test(id)){ row.appendChild(document.createTextNode('T')); row.appendChild(badgeSpan(id.replace('Tv','v'))); row.appendChild(document.createTextNode(' = ')); } else { const badge=badgeSpan(id); if(color==='cyan'){ badge.style.background='var(--cyan-soft)'; badge.style.color='var(--cyan-dark)'; } row.appendChild(badge); row.appendChild(document.createTextNode(' = ')); } const coord=document.createElement('span'); coord.className='coord'; coord.dataset.id=id; const v=state[id]; const col=document.createElement('span'); col.className='coord-vec'; const r1=document.createElement('span'); r1.className='r'; r1.textContent=String(Math.round(v.x)); const r2=document.createElement('span'); r2.className='r'; r2.textContent=String(Math.round(v.y)); col.appendChild(r1); col.appendChild(r2); coord.appendChild(col); coord.addEventListener('click',()=>startEdit(coord)); row.appendChild(coord); rows.appendChild(row); }
+function startEdit(coordEl){ if(coordEl.classList.contains('editing')) return; coordEl.classList.add('editing'); const id=coordEl.dataset.id; const v=state[id]; const input=document.createElement('input'); input.value=`${Math.round(v.x)} ${Math.round(v.y)}`; coordEl.textContent=''; coordEl.appendChild(input); input.focus(); input.select(); input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const ok=applyInput(id,input.value); coordEl.classList.remove('editing'); if(ok) updateAll(); } else if(e.key==='Escape'){ coordEl.classList.remove('editing'); updateAll(); } }); input.addEventListener('blur',()=>{ coordEl.classList.remove('editing'); updateAll(); }); }
+function applyInput(id,str){ try{ const s=str.replace(/[()]/g,'').trim(); if(s.includes('/')) return false; const pieces=s.split(/[\s,]+/).filter(Boolean); if(pieces.length<2) return false; const x=parseInt(pieces[0],10), y=parseInt(pieces[1],10); if(!Number.isInteger(x)||!Number.isInteger(y)) return false; if(!state[id]) return false; state[id].x=clamp(x,-R,R); state[id].y=clamp(y,-R,R); if(id==='Tv1'||id==='Tv2'){ const dest=snapToBasis(state[id],state.w1,state.w2,true); state[id].x=dest.x; state[id].y=dest.y; tvWeights[id]={a:dest.coeff[0],b:dest.coeff[1]}; } if(id==='w1'||id==='w2'){ recomputeTvWeights(); } if(id==='P'){ updateP(); updateTP(); } return true; }catch(_){ return false; } }
+
+function renderWeightsRow(id){ const row=document.createElement('div'); row.className='row'; row.appendChild(document.createTextNode('T')); row.appendChild(badgeSpan(id.replace('Tv','v'))); row.appendChild(document.createTextNode(' = ')); const aSpan=document.createElement('span'); aSpan.className='coord'; aSpan.dataset.weightFor=id; aSpan.dataset.which='a'; const bSpan=document.createElement('span'); bSpan.className='coord'; bSpan.dataset.weightFor=id; bSpan.dataset.which='b'; const ab=tvWeights[id]; aSpan.textContent=fmtQ(ab.a); bSpan.textContent=fmtQ(ab.b); aSpan.addEventListener('click',()=>startEditWeight(aSpan)); bSpan.addEventListener('click',()=>startEditWeight(bSpan)); row.appendChild(aSpan); row.appendChild(document.createTextNode(' ')); const w1b=badgeSpan('w1'); w1b.style.background='var(--cyan-soft)'; w1b.style.color='var(--cyan-dark)'; row.appendChild(w1b); row.appendChild(document.createTextNode(' + ')); row.appendChild(bSpan); const w2b=badgeSpan('w2'); w2b.style.background='var(--cyan-soft)'; w2b.style.color='var(--cyan-dark)'; row.appendChild(document.createTextNode(' ')); row.appendChild(w2b); rows.appendChild(row); }
+function startEditWeight(el){ if(el.classList.contains('editing')) return; el.classList.add('editing'); const id=el.dataset.weightFor, which=el.dataset.which; const input=document.createElement('input'); input.value=el.textContent; el.textContent=''; el.appendChild(input); input.focus(); input.select(); input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const s=input.value.trim(); let val; const slash=s.indexOf('/'); if(slash>-1){ const nn=parseInt(s.slice(0,slash),10), dd=parseInt(s.slice(slash+1),10); val=(dd!==0)?(nn/dd):NaN; } else { val=parseFloat(s); } if(!Number.isNaN(val)) applyWeight(id,which,val); const dest=snapToBasis(state[id],state.w1,state.w2,true); animateSnap(id,dest,dest.coeff,'Tv',()=>{ tvWeights[id]={a:dest.coeff[0],b:dest.coeff[1]}; updateAll();}); el.classList.remove('editing'); } else if(e.key==='Escape'){ el.classList.remove('editing'); updateAll(); } }); input.addEventListener('blur',()=>{ el.classList.remove('editing'); updateAll(); }); }
+function applyWeight(id,which,val){ if(!state[id]) return; let a=tvWeights[id].a, b=tvWeights[id].b; if(which==='a') a=val; else b=val; tvWeights[id]={a:a,b:b}; const w1=state.w1,w2=state.w2; state[id].x=a*w1.x + b*w2.x; state[id].y=a*w1.y + b*w2.y; updateTP(); }
+
+function renderReadout(){ rows.innerHTML=''; renderMatrix(); renderWeightsRow('Tv1'); renderWeightsRow('Tv2'); renderRow('v1','blue'); renderRow('v2','blue'); renderRow('w1','cyan'); renderRow('w2','cyan'); renderRow('Tv1','blue'); renderRow('Tv2','blue'); }
+
+// drawing P + TP and everything
+function updateP(){ const Px=state.P.x, Py=state.P.y; Ppath.setAttribute('d',buildPPathD(Px,Py)); const tip=worldToPx({x:Px,y:Py}); const base=worldToPx({x:Px*.85,y:Py*.85}); Phit.setAttribute('x1',base.x); Phit.setAttribute('y1',base.y); Phit.setAttribute('x2',tip.x); Phit.setAttribute('y2',tip.y); }
+function updateTP(){ const Px=state.P.x, Py=state.P.y; TPpath.setAttribute('d',buildTPPathD(Px,Py)); }
+
+function updateAll(){ ['v1','v2','w1','w2','Tv1','Tv2'].forEach(updateVector); if(flags.std) drawStdGrid(); else gridStd.innerHTML=''; if(flags.v) drawBasisGrid(state.v1,state.v2,gridV); else gridV.innerHTML=''; if(flags.w) drawBasisGrid(state.w1,state.w2,gridW); else gridW.innerHTML=''; updateP(); updateTP(); renderReadout(); }
+
+// controls
+const btnStd=document.getElementById('btnStd'); const btnV=document.getElementById('btnV'); const btnW=document.getElementById('btnW');
+document.getElementById('resetBtn').addEventListener('click',()=>{ Object.keys(state).forEach(k=>{ state[k].x=initState[k].x; state[k].y=initState[k].y; }); initTvWeights(); updateAll(); });
+const flags={std:true,v:false,w:false};
+function updateBtnStates(){ btnStd.style.opacity=flags.std?1:0.5; btnV.style.opacity=flags.v?1:0.5; btnW.style.opacity=flags.w?1:0.5; }
+function toggleGrid(group,key,draw){ flags[key]=!flags[key]; if(flags[key]){ draw(); group.style.display='block'; } else { group.style.display='none'; group.innerHTML=''; } updateBtnStates(); }
+btnStd.addEventListener('click',()=>toggleGrid(gridStd,'std',drawStdGrid));
+btnV.addEventListener('click',()=>toggleGrid(gridV,'v',()=>drawBasisGrid(state.v1,state.v2,gridV)));
+btnW.addEventListener('click',()=>toggleGrid(gridW,'w',()=>drawBasisGrid(state.w1,state.w2,gridW)));
+
+// init
+initTvWeights(); drawStdGrid(); updateBtnStates(); updateAll();
+
+// ===== quick tests =====
+(function runTests(){
+  console.assert(VECTOR_IDS.has('v1') && VECTOR_IDS.has('Tv2'), 'vector id set');
+  // ensure no crash when clicking P hit first
+  (function(){ const tmp=dragTarget; dragTarget='P'; const beforeX=state.P.x; state.P.x=beforeX; dragTarget=tmp; })();
+})();
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</body>
+</html>
