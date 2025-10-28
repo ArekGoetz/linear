@@ -3,7 +3,7 @@ doctype html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Change of Basis – Interactive Plane</title>
+<title>Change of Basis</title>
 <style>
 :root{
   --bg:#f5f6f8; --plane:#f2f3f5; --grid:#d9dee5; --text:#222;
@@ -33,7 +33,7 @@ svg{width:100%;height:100%;touch-action:none}
 .grid-v line{stroke:var(--blue);stroke-width:1}
 .grid-w line{stroke:var(--cyan);stroke-width:1}
 .arrow{stroke-width:3;fill:none}
-.label{font-size:18px;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:3px;dominant-baseline:middle}
+.label{font-size:20px;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:3px;dominant-baseline:middle}
 .outline{stroke:var(--cyan);stroke-width:7;fill:none}
 .origin-dot{fill:#555}
 .hit{stroke:rgba(0,0,0,0);stroke-width:24;pointer-events:all;cursor:grab}
@@ -45,7 +45,7 @@ svg{width:100%;height:100%;touch-action:none}
 <div class="app">
   <div class="plane-wrap">
     <div class="plane-area">
-      <svg id="plane" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid meet">
+      <svg id="plane" viewBox="0 0 800 1000" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="arrowhead-blue" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
             <path d="M0,0 L10,5 L0,10 Z" fill="var(--blue)"></path>
