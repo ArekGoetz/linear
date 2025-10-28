@@ -1,4 +1,4 @@
-doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -94,28 +94,26 @@ svg{width:100%;height:100%;touch-action:none}
 const SVG_SIZE=800; const R=10; const O=SVG_SIZE/2; const SCALE=SVG_SIZE/(2*R);
 function toPxX(x){return O + x*SCALE;} function toPxY(y){return O - y*SCALE;}
 const plane=document.getElementById('plane');
-function clientToSvgPoint(evt){ let spx=evt.clientX, spy=evt.clientY; const m=plane.getScreenCTM(); if(plane.createSVGPoint&&m){ const pt=plane.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY; const inv=m.inverse(); const sp=pt.matrixTransform(inv); spx=sp.x; spy=sp.y; } return {x:spx,y:spy}; }
+function clientToSvgPoint(evt){ let spx=evt.clientX, spy=evt.clientY; const m=plane.getScreenCTM(); if(plane.createSVGPoint&&m){ const pt=plane.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY; const res=pt.matrixTransform(m.inverse()); return res; } return {x:spx,y:spy}; }
 function svgPxToUnits(px){ return {x:(px.x-O)/SCALE, y:(O-px.y)/SCALE}; }
 
 // ===== grids =====
 const gridStd=document.getElementById('grid_std');
 const gridV=document.getElementById('grid_v');
 const gridW=document.getElementById('grid_w');
-function drawStdGrid(){ gridStd.innerHTML=''; for(let i=-R;i<=R;i++){ const v=document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('x1',toPxX(i)); v.setAttribute('y1',toPxY(-R)); v.setAttribute('x2',toPxX(i)); v.setAttribute('y2',toPxY(R)); gridStd.appendChild(v); const h=document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('x1',toPxX(-R)); h.setAttribute('y1',toPxY(i)); h.setAttribute('x2',toPxX(R)); h.setAttribute('y2',toPxY(i)); gridStd.appendChild(h);} }
-function drawBasisGrid(b1,b2,group){ group.innerHTML=''; const x1=b1.x,y1=b1.y,x2=b2.x,y2=b2.y; const det=x1*y2 - y1*x2; if(Math.abs(det)<1e-6) return; const range=R*1.25,M=12,T=range*3; for(let k=-M;k<=M;k++){ const ax=k*x2 - T*x1, ay=k*y2 - T*y1; const bx=k*x2 + T*x1, by=k*y2 + T*y1; const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',toPxX(ax)); line.setAttribute('y1',toPxY(ay)); line.setAttribute('x2',toPxX(bx)); line.setAttribute('y2',toPxY(by)); group.appendChild(line);} for(let k=-M;k<=M;k++){ const ax=k*x1 - T*x2, ay=k*y1 - T*y2; const bx=k*x1 + T*x2, by=k*y1 + T*y2; const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',toPxX(ax)); line.setAttribute('y1',toPxY(ay)); line.setAttribute('x2',toPxX(bx)); line.setAttribute('y2',toPxY(by)); group.appendChild(line);} }
+function drawStdGrid(){ gridStd.innerHTML=''; for(let i=-R;i<=R;i++){ const v=document.createElementNS('http://www.w3.org/2000/svg','line'); v.setAttribute('x1',toPxX(i)); v.setAttribute('y1',toPxY(-R)); v.setAttribute('x2',toPxX(i)); v.setAttribute('y2',toPxY(R)); v.setAttribute('stroke-width', i===0?2:1); gridStd.appendChild(v); const h=document.createElementNS('http://www.w3.org/2000/svg','line'); h.setAttribute('y1',toPxY(i)); h.setAttribute('x1',toPxX(-R)); h.setAttribute('y2',toPxY(i)); h.setAttribute('x2',toPxX(R)); h.setAttribute('stroke-width', i===0?2:1); gridStd.appendChild(h);} }
+function drawBasisGrid(b1,b2,group){ group.innerHTML=''; const x1=b1.x,y1=b1.y,x2=b2.x,y2=b2.y; const det=x1*y2 - y1*x2; if(Math.abs(det)<1e-6) return; const range=R*1.25,M=12,T=range*3; for(let k=-M;k<=M;k++){ for(let j=-M;j<=M;j++){ const px=k*b1.x + j*b2.x; const py=k*b1.y + j*b2.y; if(Math.hypot(px,py)>T) continue; const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',toPxX(px)); line.setAttribute('y1',toPxY(py-0.001)); line.setAttribute('x2',toPxX(px)); line.setAttribute('y2',toPxY(py+0.001)); group.appendChild(line); } } }
 
 // ===== state =====
 const initState={ v1:{x:4,y:0}, v2:{x:0,y:4}, w1:{x:-1,y:-1}, w2:{x:-1,y:0}, Tv1:{x:1,y:2}, Tv2:{x:0,y:1}, P:{x:2,y:2} };
 const state=JSON.parse(JSON.stringify(initState));
 const tvWeights={Tv1:{a:0,b:0}, Tv2:{a:0,b:0}};
 
-// ===== vectors =====
-function makeVectorGroup(id){ const g=document.getElementById(id); g.innerHTML=''; const isBlue=(g.dataset.color==='blue'); const color=isBlue?'var(--blue)':'var(--cyan)'; const outlineColor=g.dataset.outline? 'var(--cyan)':null; const outline=outlineColor?document.createElementNS('http://www.w3.org/2000/svg','path'):null; if(outline){ outline.setAttribute('class','outline'); outline.setAttribute('stroke',outlineColor); g.appendChild(outline);} const line=document.createElementNS('http://www.w3.org/2000/svg','path'); line.setAttribute('class','arrow'); line.setAttribute('stroke',color); line.setAttribute('marker-end', isBlue? 'url(#arrowhead-blue)':'url(#arrowhead-cyan)'); const hit=document.createElementNS('http://www.w3.org/2000/svg','line'); hit.setAttribute('class','hit'); const label=document.createElementNS('http://www.w3.org/2000/svg','text'); label.setAttribute('class','label hit'); label.setAttribute('fill',color); g.appendChild(line); g.appendChild(hit); g.appendChild(label); return {g,outline,line,label,hit}; }
+// ===== vectors =====nfunction makeVectorGroup(id){ const g=document.getElementById(id); g.innerHTML=''; const isBlue=(g.dataset.color==='blue'); const color=isBlue?'var(--blue)':'var(--cyan)'; const outlineColor=g.dataset.outline||null; const path=document.createElementNS('http://www.w3.org/2000/svg','path'); path.setAttribute('class','arrow'); path.setAttribute('stroke',color); path.setAttribute('marker-end', isBlue? 'url(#arrowhead-blue)':'url(#arrowhead-cyan)'); g.appendChild(path); const outline=null; if(outlineColor){ const o=document.createElementNS('http://www.w3.org/2000/svg','path'); o.setAttribute('class','outline'); o.setAttribute('stroke',outlineColor); g.appendChild(o); outline=o; } const lbl=document.createElementNS('http://www.w3.org/2000/svg','text'); lbl.setAttribute('class','label'); lbl.setAttribute('fill',color); g.appendChild(lbl); const hit=document.createElementNS('http://www.w3.org/2000/svg','line'); hit.setAttribute('class','hit'); g.appendChild(hit); return {group:g,line:path,outline:outline,label:lbl,hit:hit}; }
 const vectors={ v1:makeVectorGroup('v1'), v2:makeVectorGroup('v2'), w1:makeVectorGroup('w1'), w2:makeVectorGroup('w2'), Tv1:makeVectorGroup('Tv1'), Tv2:makeVectorGroup('Tv2') };
 
 function setPath(p,x1,y1,x2,y2){ p.setAttribute('d',`M ${x1} ${y1} L ${x2} ${y2}`); }
-function updateVector(id){ const node=state[id]; if(!node){ return; } const {x,y}=node; const {outline,line,label,hit}=vectors[id]; const x1=toPxX(0), y1=toPxY(0), x2=toPxX(x), y2=toPxY(y); if(outline) setPath(outline,x1,y1,x2,y2); setPath(line,x1,y1,x2,y2); const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1; const ux=dx/len, uy=dy/len; const L=36, F=0; const hx1=x2-ux*L, hy1=y2-uy*L, hx2=x2+ux*F, hy2=y2+uy*F; hit.setAttribute('x1',hx1); hit.setAttribute('y1',hy1); hit.setAttribute('x2',hx2); hit.setAttribute('y2',hy2); // label at tip + 0.8*height along arrow
-  label.textContent=id; const labelHeight=18; const offset=0.8*labelHeight; const lblx=x2 + ux*offset; const lbly=y2 + uy*offset; label.setAttribute('x',lblx); label.setAttribute('y',lbly); label.setAttribute('text-anchor','middle'); }
+function updateVector(id){ const node=state[id]; if(!node){ return; } const {x,y}=node; const {outline,line,label,hit}=vectors[id]; const x1=toPxX(0), y1=toPxY(0), x2=toPxX(x), y2=toPxY(y); if(outline) outline.setAttribute('d',`M ${x1} ${y1} L ${x2} ${y2}`); line.setAttribute('d',`M ${x1} ${y1} L ${x2} ${y2}`); hit.setAttribute('x1',x1); hit.setAttribute('y1',y1); hit.setAttribute('x2',x2); hit.setAttribute('y2',y2); label.textContent=id; const L=Math.hypot(x2-x1,y2-y1)||1; const ux=(x2-x1)/L, uy=(y2-y1)/L; const offset=0.8*18; const lblx=x2 + ux*offset; const lbly=y2 + uy*offset; label.setAttribute('x',lblx); label.setAttribute('y',lbly); }
 
 // ===== P shape (asymmetric, shaft + aligned semicircle at tip base) =====
 const Pgroup=document.getElementById('Pgroup'); const TPgroup=document.getElementById('TPgroup');
@@ -124,8 +122,8 @@ const Phit=document.createElementNS('http://www.w3.org/2000/svg','line'); Phit.s
 const TPpath=document.createElementNS('http://www.w3.org/2000/svg','path'); TPpath.setAttribute('class','tp-arrow'); TPgroup.appendChild(TPpath);
 
 function worldToPx(pt){ return {x:toPxX(pt.x), y:toPxY(pt.y)}; }
-function samplePWorld(Px,Py){ const L=Math.hypot(Px,Py)||1; const t={x:Px/L,y:Py/L}; const n={x:-t.y,y:t.x}; const head=Math.min(0.8,0.18*L); const base={x:Px - t.x*head, y:Py - t.y*head}; const r=head*0.5; const center={x:base.x + t.x*r, y:base.y + t.y*r}; const N=36; const arc=[]; for(let i=0;i<=N;i++){ const th=Math.PI - Math.PI*(i/N); const px=center.x + Math.cos(th)*t.x*r + Math.sin(th)*n.x*r; const py=center.y + Math.cos(th)*t.y*r + Math.sin(th)*n.y*r; arc.push({x:px,y:py}); } return {shaft:[{x:0,y:0}, base], arc}; }
-function buildPPathD(Px,Py){ const {shaft,arc}=samplePWorld(Px,Py); const S=shaft.map(worldToPx); const A=arc.map(worldToPx); let d=`M ${S[0].x} ${S[0].y} L ${S[1].x} ${S[1].y}`; d+=` M ${A[0].x} ${A[0].y}`; for(let i=1;i<A.length;i++){ d+=` L ${A[i].x} ${A[i].y}`;} return d; }
+function samplePWorld(Px,Py){ const L=Math.hypot(Px,Py)||1; const t={x:Px/L,y:Py/L}; const n={x:-t.y,y:t.x}; const head=Math.min(0.8,0.18*L); const base={x:Px - t.x*head, y:Py - t.y*head}; const r=head*0.6; const shaft=[ {x:0,y:0}, {x:base.x,y:base.y} ]; const arc=[]; const steps=10; for(let i=0;i<=steps;i++){ const a=i/steps*Math.PI; arc.push({x:base.x + n.x*r*Math.cos(a) + t.x*r*Math.sin(a), y:base.y + n.y*r*Math.cos(a) + t.y*r*Math.sin(a)}); } return {shaft,arc}; }
+function buildPPathD(Px,Py){ const {shaft,arc}=samplePWorld(Px,Py); const S=shaft.map(worldToPx); const A=arc.map(worldToPx); let d=`M ${S[0].x} ${S[0].y} L ${S[1].x} ${S[1].y}`; d+=` M ${A[0].x} ${A[0].y}`; for(let i=1;i<A.length;i++){ d+=` L ${A[i].x} ${A[i].y}`; } return d; }
 
 // ===== linear algebra helpers =====
 function inv2(M){ const a=M[0][0],b=M[0][1],c=M[1][0],d=M[1][1]; const det=a*d-b*c; if(Math.abs(det)<1e-9) return [[NaN,NaN],[NaN,NaN]]; const s=1/det; return [[d*s,-b*s],[-c*s,a*s]]; }
@@ -134,13 +132,13 @@ function getV(){ return [[state.v1.x,state.v2.x],[state.v1.y,state.v2.y]]; }
 function getW(){ return [[state.w1.x,state.w2.x],[state.w1.y,state.w2.y]]; }
 function currentTstd(){ const V=getV(), W=getW(), Vinv=inv2(V); const a=tvWeights.Tv1.a, b=tvWeights.Tv2.a, c=tvWeights.Tv1.b, d=tvWeights.Tv2.b; const A=[[a,b],[c,d]]; return mul2(W, mul2(A, Vinv)); }
 function applyTStd(pt){ const T=currentTstd(); return {x:T[0][0]*pt.x + T[0][1]*pt.y, y:T[1][0]*pt.x + T[1][1]*pt.y}; }
-function buildTPPathD(Px,Py){ const {shaft,arc}=samplePWorld(Px,Py); const tS=shaft.map(applyTStd).map(worldToPx); const tA=arc.map(applyTStd).map(worldToPx); let d=`M ${tS[0].x} ${tS[0].y} L ${tS[1].x} ${tS[1].y}`; d+=` M ${tA[0].x} ${tA[0].y}`; for(let i=1;i<tA.length;i++){ d+=` L ${tA[i].x} ${tA[i].y}`;} return d; }
+function buildTPPathD(Px,Py){ const {shaft,arc}=samplePWorld(Px,Py); const tS=shaft.map(applyTStd).map(worldToPx); const tA=arc.map(applyTStd).map(worldToPx); let d=`M ${tS[0].x} ${tS[0].y} L ${tS[1].x} ${tS[1].y}`; d+=` M ${tA[0].x} ${tA[0].y}`; for(let i=1;i<tA.length;i++){ d+=` L ${tA[i].x} ${tA[i].y}`; } return d; }
 
 // snapping helpers
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function inverseCoeffs(vec,b1,b2){ const det=b1.x*b2.y - b1.y*b2.x; if(Math.abs(det)<1e-8) return null; const a=(vec.x*b2.y - vec.y*b2.x)/det; const b=(-vec.x*b1.y + vec.y*b1.x)/det; return {a,b}; }
-function snapToStd(id){ const node=state[id]; if(!node){ return {x:0,y:0,coeff:[0,0]}; } const nx=Math.round(node.x), ny=Math.round(node.y); if(nx===0 && ny===0){ const cand=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]; const vx=node.x, vy=node.y; let best=[1,0],bestD=1e9; for(const [cx,cy] of cand){ const d=(cx-vx)**2 + (cy-vy)**2; if(d<bestD){bestD=d; best=[cx,cy];}} return {x:best[0],y:best[1],coeff:best}; } return {x:nx,y:ny,coeff:[nx,ny]}; }
-function snapToBasis(vec,b1,b2,allowZero){ const res=inverseCoeffs(vec,b1,b2); if(!res) return {x:vec.x,y:vec.y,coeff:[0,0]}; let ar=Math.round(res.a), br=Math.round(res.b); if(!allowZero && ar===0 && br===0){ const cand=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]; let best=[1,0],bestD=1e9; for(const [m,n] of cand){ const px=m*b1.x + n*b2.x - vec.x; const py=m*b1.y + n*b2.y - vec.y; const d=px*px+py*py; if(d<bestD){bestD=d; best=[m,n];}} ar=best[0]; br=best[1]; } return {x:ar*b1.x + br*b2.x, y:ar*b1.y + br*b2.y, coeff:[ar,br]}; }
+function snapToStd(id){ const node=state[id]; if(!node){ return {x:0,y:0,coeff:[0,0]}; } const nx=Math.round(node.x), ny=Math.round(node.y); if(nx===0 && ny===0){ const cand=[[1,0],[-1,0],[0,1],[0,-1]]; for(const c of cand){ if(Math.abs(node.x-c[0])<0.3 && Math.abs(node.y-c[1])<0.3){ node.x=c[0]; node.y=c[1]; return {x:node.x,y:node.y,coeff:[node.x,node.y]}; } } } node.x=nx; node.y=ny; return {x:node.x,y:node.y,coeff:[node.x,node.y]}; }
+function snapToBasis(vec,b1,b2,allowZero){ const res=inverseCoeffs(vec,b1,b2); if(!res) return {x:vec.x,y:vec.y,coeff:[0,0]}; let ar=Math.round(res.a), br=Math.round(res.b); if(!allowZero && ar===0 && br===0){ if(Math.abs(res.a)>Math.abs(res.b)) ar=Math.round(res.a>0?1:-1); else br=Math.round(res.b>0?1:-1); } const snapped={x:ar*b1.x + br*b2.x, y:ar*b1.y + br*b2.y}; return {x:snapped.x,y:snapped.y,coeff:[ar,br]}; }
 
 function initTvWeights(){ const w1=state.w1, w2=state.w2; ['Tv1','Tv2'].forEach(id=>{ const res=inverseCoeffs(state[id],w1,w2); tvWeights[id]=res?{a:res.a,b:res.b}:{a:0,b:0}; }); }
 function recomputeTvWeights(){ const w1=state.w1, w2=state.w2; ['Tv1','Tv2'].forEach(id=>{ const res=inverseCoeffs(state[id],w1,w2); if(res){ tvWeights[id]={a:res.a,b:res.b}; }}); }
@@ -152,31 +150,27 @@ function onPointerDown(e){
   const t=e.target; const g=t.parentNode;
   // prioritize P before generic hit logic
   if(t===Phit || t===Ppath){ dragTarget='P'; if(Phit.setPointerCapture&&e.pointerId!=null) Phit.setPointerCapture(e.pointerId); return; }
-  if(t.classList && t.classList.contains('hit') && g && VECTOR_IDS.has(g.id)){
-    dragTarget=g.id; if(t.setPointerCapture&&e.pointerId!=null) t.setPointerCapture(e.pointerId); return;
-  }
+  if(t.classList && t.classList.contains('hit') && g && VECTOR_IDS.has(g.id)){ dragTarget=g.id; if(t.setPointerCapture&&e.pointerId!=null) t.setPointerCapture(e.pointerId); return; }
 }
-function onPointerMove(e){ if(!dragTarget) return; const pt=svgPxToUnits(clientToSvgPoint(e)); if(dragTarget==='P'){ state.P.x=clamp(pt.x,-R,R); state.P.y=clamp(pt.y,-R,R); updateP(); updateTP(); return; } if(!state[dragTarget]) return; state[dragTarget].x=clamp(pt.x,-R,R); state[dragTarget].y=clamp(pt.y,-R,R); if(dragTarget==='Tv1'||dragTarget==='Tv2'){ const res=inverseCoeffs(state[dragTarget], state.w1, state.w2); if(res) tvWeights[dragTarget]={a:res.a,b:res.b}; } if(dragTarget==='w1'||dragTarget==='w2'){ recomputeTvWeights(); }
-  updateAll(); }
-function onPointerUp(){ if(!dragTarget) return; if(dragTarget==='P'){ dragTarget=null; return; } if(!state[dragTarget]){ dragTarget=null; return; } if(dragTarget==='v1'||dragTarget==='v2'){ const dest=snapToStd(dragTarget); animateSnap(dragTarget,dest,dest.coeff,'blue', updateAll); } else if(dragTarget==='w1'||dragTarget==='w2'){ const dest=snapToStd(dragTarget); animateSnap(dragTarget,dest,dest.coeff,null,()=>{recomputeTvWeights(); updateAll();}); } else if(dragTarget==='Tv1'||dragTarget==='Tv2'){ const dest=snapToBasis(state[dragTarget],state.w1,state.w2,true); tvWeights[dragTarget]={a:dest.coeff[0],b:dest.coeff[1]}; animateSnap(dragTarget,dest,dest.coeff,'Tv',()=>{ tvWeights[dragTarget]={a:dest.coeff[0],b:dest.coeff[1]}; updateAll();}); } dragTarget=null; }
-plane.addEventListener('pointerdown',onPointerDown); plane.addEventListener('pointermove',onPointerMove); plane.addEventListener('pointerup',onPointerUp); window.addEventListener('pointerup',onPointerUp);
+function onPointerMove(e){ if(!dragTarget) return; const pt=svgPxToUnits(clientToSvgPoint(e)); if(dragTarget==='P'){ state.P.x=clamp(pt.x,-R,R); state.P.y=clamp(pt.y,-R,R); updateP(); updateTP(); return; } state[dragTarget].x=clamp(pt.x,-R,R); state[dragTarget].y=clamp(pt.y,-R,R); updateAll(); }
+function onPointerUp(){ if(!dragTarget) return; if(dragTarget==='P'){ dragTarget=null; return; } if(!state[dragTarget]){ dragTarget=null; return; } if(dragTarget==='v1'||dragTarget==='v2'){ const dest=snapToStd(dragTarget); animateSnap(dragTarget,dest,{coeff:dest.coeff},'std',()=>{ dragTarget=null; initTvWeights(); updateAll(); pushStateToUrl(); }); return; } if(dragTarget==='w1'||dragTarget==='w2'){ const dest=snapToStd(dragTarget); animateSnap(dragTarget,dest,{coeff:dest.coeff},'std',()=>{ dragTarget=null; initTvWeights(); updateAll(); pushStateToUrl(); }); return; } // Tv vectors snap to w-basis
+ const dest=snapToBasis(state[dragTarget],state.w1,state.w2,false);
+ animateSnap(dragTarget,dest,{coeff:dest.coeff},'basis',()=>{ dragTarget=null; recomputeTvWeights(); updateAll(); pushStateToUrl(); }); }
+plane.addEventListener('pointerdown',onPointerDown); plane.addEventListener('pointermove',onPointerMove); window.addEventListener('pointerup',onPointerUp);
 
 // minimal tag (placeholder to keep API)
 function showTag(){}
-function animateSnap(id,dest,coeff,type,onDone){ const node=state[id]; if(!node){ if(typeof onDone==='function') onDone(); return; } const start={x:node.x,y:node.y}; const dx=dest.x-start.x, dy=dest.y-start.y; const t0=performance.now(); const dur=180; function ease(t){return t<.5?2*t*t:-1+(4-2*t)*t;} function frame(now){ const p=Math.min(1,(now-t0)/dur); const e=ease(p); node.x=start.x+dx*e; node.y=start.y+dy*e; updateVector(id); if(p<1){ requestAnimationFrame(frame);} else{ node.x=dest.x; node.y=dest.y; updateVector(id); if(typeof onDone==='function') onDone(); if(flags.v) drawBasisGrid(state.v1,state.v2,gridV); if(flags.w) drawBasisGrid(state.w1,state.w2,gridW); updateTP(); renderReadout(); } } requestAnimationFrame(frame); }
+function animateSnap(id,dest,coeff,type,onDone){ const node=state[id]; if(!node){ if(typeof onDone==='function') onDone(); return; } const start={x:node.x,y:node.y}; const dx=dest.x-start.x, dy=dest.y-start.y; const dur=200; const t0=performance.now(); function step(now){ const t=Math.min(1,(now-t0)/dur); node.x=start.x + dx*t; node.y=start.y + dy*t; updateAll(); if(t<1) requestAnimationFrame(step); else{ if(typeof onDone==='function') onDone(); } } requestAnimationFrame(step); }
 
 // inline editing (vectors + Tv weights)
 const rows=document.getElementById('rows'); const matrixEl=document.getElementById('matrix'); const eigsEl=document.getElementById('eigs');
-function badgeSpan(text){ const s=document.createElement('span'); s.style.background='var(--blue-soft)'; s.style.color='var(--blue-dark)'; s.style.fontWeight='800'; s.style.padding='2px 6px'; s.style.borderRadius='8px'; s.textContent=text; return s; }
+function badgeSpan(text){ const s=document.createElement('span'); s.style.background='var(--blue-soft)'; s.style.color='var(--blue-dark)'; s.style.fontWeight='800'; s.style.padding='2px 6px'; s.style.borderRadius='6px'; s.style.margin='0 6px'; s.textContent=text; return s; }
 function fmt2(x){ const v=Math.round(x*100)/100; return (Math.abs(v)<1e-12?0:v).toFixed(2); }
 function _gcd(a,b){ a=Math.trunc(Math.abs(a)); b=Math.trunc(Math.abs(b)); while(b){ const t=a%b; a=b; b=t; } return a||1; }
-function toFraction(x,maxDen=99,tol=1e-12){ if(!isFinite(x)) return {n:0,d:1,invalid:true}; if(Math.abs(x)<tol) return {n:0,d:1}; const sign=x<0?-1:1; x=Math.abs(x); let a0=Math.floor(x); let h1=1,k1=0,h0=a0,k0=1; let b=x-a0; if(b<tol){ const g=_gcd(h0,k0); return {n:sign*(h0/g), d:k0/g}; } while(b>tol){ b=1/b; let a=Math.floor(b); let nextK=a*k0 + k1; if(nextK>maxDen){ const aCap=Math.floor((maxDen-k1)/k0); if(aCap<=0) break; a=aCap; nextK=a*k0 + k1; } const nextH=a*h0 + h1; h1=h0; k1=k0; h0=nextH; k0=nextK; const err=Math.abs(x - h0/k0); if(err<tol || k0>=maxDen) break; b=b-a; } const g=_gcd(h0,k0); return {n:sign*(h0/g), d:k0/g}; }
+function toFraction(x,maxDen=99,tol=1e-12){ if(!isFinite(x)) return {n:0,d:1,invalid:true}; if(Math.abs(x)<tol) return {n:0,d:1}; const sign=x<0?-1:1; x=Math.abs(x); let a0=Math.floor(x); let h1=1,k1=0,h= a0,k=1; let rem=x-a0; if(rem<tol) return {n:sign*a0,d:1}; let prevH=1, prevK=0; let currH=a0, currK=1; let frac=x; for(let i=0;i<20;i++){ const inv=1/(frac - Math.floor(frac)); const ai=Math.floor(inv); const nextH=ai*currH + prevH; const nextK=ai*currK + prevK; if(nextK>maxDen) break; prevH=currH; prevK=nextK; currH=nextH; currK=nextK; frac=inv; if(Math.abs(currH/currentK - x) < tol) break; } return {n:sign*currH,d:currK}; }
 function fmtQ(x){ if(!isFinite(x)) return '–'; const f=toFraction(x,99,1e-12); return f.d===1? String(f.n) : `${f.n}/${f.d}`; }
 
-// ==============================
-// ========== MATRICES ==========
-// LaTeX/MathJax block: edit here if you want to tweak how matrices render.
-// ==============================
+// ==============================// ========== MATRICES ==========// LaTeX/MathJax block: edit here if you want to tweak how matrices render.// ==============================
 function renderMatrix() {
   matrixEl.innerHTML = '';
   eigsEl.innerHTML = '';
@@ -194,15 +188,15 @@ function renderMatrix() {
   if (disc < 0) {
     const re = tr / 2, im = Math.sqrt(-disc) / 2;
     eigRow.innerHTML = `
-      \\( \\lambda_1 = ${fmt2(re)} + ${fmt2(im)}\\,i ,\\; 
-      \\lambda_2 = ${fmt2(re)} - ${fmt2(im)}\\,i \\)
+      \( \lambda_1 = ${fmt2(re)} + ${fmt2(im)}\,i ,\; \
+      \lambda_2 = ${fmt2(re)} - ${fmt2(im)}\,i \)
     `;
   } else {
     const s = Math.sqrt(disc);
     const l1 = 0.5 * (tr + s), l2 = 0.5 * (tr - s);
     eigRow.innerHTML = `
-      \\( \\lambda_1 = ${fmt2(l1)} ,\\; 
-      \\lambda_2 = ${fmt2(l2)}  \\)
+      \( \lambda_1 = ${fmt2(l1)} ,\; \
+      \lambda_2 = ${fmt2(l2)}  \)
     `;
   }
   eigsEl.appendChild(eigRow);
@@ -214,10 +208,10 @@ function renderMatrix() {
   const r1 = document.createElement('div');
   r1.className = 'row';
   r1.innerHTML = `
-   \\( C^{-1} = M(I,\\, w,\\, v) = \\begin{bmatrix} 
-    ${fmtQ(I_wv[0][0])} & ${fmtQ(I_wv[0][1])} \\\\ 
-    ${fmtQ(I_wv[1][0])} & ${fmtQ(I_wv[1][1])} 
-    \\end{bmatrix} \\)
+   \( C^{-1} = M(I,\, w,\, v) = \begin{bmatrix} \
+    ${fmtQ(I_wv[0][0])} & ${fmtQ(I_wv[0][1])} \\ \
+    ${fmtQ(I_wv[1][0])} & ${fmtQ(I_wv[1][1])} \\ \
+    \end{bmatrix} \)
   `;
   matrixEl.appendChild(r1);
 
@@ -225,10 +219,10 @@ function renderMatrix() {
   const r2 = document.createElement('div');
   r2.className = 'row';
   r2.innerHTML = `
-    \\( B = M(T,\\, v,\\, v) = \\begin{bmatrix} 
-    ${fmtQ(M_T_vv[0][0])} & ${fmtQ(M_T_vv[0][1])} \\\\ 
-    ${fmtQ(M_T_vv[1][0])} & ${fmtQ(M_T_vv[1][1])} 
-    \\end{bmatrix} \\)
+    \( B = M(T,\, v,\, v) = \begin{bmatrix} \
+    ${fmtQ(M_T_vv[0][0])} & ${fmtQ(M_T_vv[0][1])} \\ \
+    ${fmtQ(M_T_vv[1][0])} & ${fmtQ(M_T_vv[1][1])} \\ \
+    \end{bmatrix} \)
   `;
   matrixEl.appendChild(r2);
 
@@ -236,30 +230,30 @@ function renderMatrix() {
   const r3 = document.createElement('div');
   r3.className = 'row';
   r3.innerHTML = `
-    \\( D = M(T,\\, w,\\, w) = \\begin{bmatrix} 
-    ${fmtQ(M_T_ww[0][0])} & ${fmtQ(M_T_ww[0][1])} \\\\ 
-    ${fmtQ(M_T_ww[1][0])} & ${fmtQ(M_T_ww[1][1])} 
-    \\end{bmatrix} \\)
+    \( D = M(T,\, w,\, w) = \begin{bmatrix} \
+    ${fmtQ(M_T_ww[0][0])} & ${fmtQ(M_T_ww[0][1])} \\ \
+    ${fmtQ(M_T_ww[1][0])} & ${fmtQ(M_T_ww[1][1])} \\ \
+    \end{bmatrix} \)
   `;
   matrixEl.appendChild(r3);
 
   const r4 = document.createElement('div');
   r4.className = 'row';
   r4.innerHTML = `
-    \\( C = M(I,\\, v,\\, w) = \\begin{bmatrix} 
-    ${fmtQ(I_vw[0][0])} & ${fmtQ(I_vw[0][1])} \\\\ 
-    ${fmtQ(I_vw[1][0])} & ${fmtQ(I_vw[1][1])} 
-    \\end{bmatrix} \\)
+    \( C = M(I,\, v,\, w) = \begin{bmatrix} \
+    ${fmtQ(I_vw[0][0])} & ${fmtQ(I_vw[0][1])} \\ \
+    ${fmtQ(I_vw[1][0])} & ${fmtQ(I_vw[1][1])} \\ \
+    \end{bmatrix} \)
   `;
   matrixEl.appendChild(r4);
 
   const r5 = document.createElement('div');
   r5.className = 'row';
   r5.innerHTML = `
-     \\( A =  M(T,\\, v,\\, w) = \\begin{bmatrix} 
-    ${fmtQ(a)} & ${fmtQ(b)} \\\\ 
-    ${fmtQ(c)} & ${fmtQ(d)} 
-    \\end{bmatrix} \\)
+     \( A =  M(T,\, v,\, w) = \begin{bmatrix} \
+    ${fmtQ(a)} & ${fmtQ(b)} \\ \
+    ${fmtQ(c)} & ${fmtQ(d)} \\ \
+    \end{bmatrix} \)
   `;
   matrixEl.appendChild(r5);
 
@@ -268,15 +262,16 @@ function renderMatrix() {
   }
 }
 
-function renderRow(id,color){ const row=document.createElement('div'); row.className='row'; if(/^Tv[12]$/.test(id)){ row.appendChild(document.createTextNode('T')); row.appendChild(badgeSpan(id.replace('Tv','v'))); row.appendChild(document.createTextNode(' = ')); } else { const badge=badgeSpan(id); if(color==='cyan'){ badge.style.background='var(--cyan-soft)'; badge.style.color='var(--cyan-dark)'; } row.appendChild(badge); row.appendChild(document.createTextNode(' = ')); } const coord=document.createElement('span'); coord.className='coord'; coord.dataset.id=id; const v=state[id]; const col=document.createElement('span'); col.className='coord-vec'; const r1=document.createElement('span'); r1.className='r'; r1.textContent=String(Math.round(v.x)); const r2=document.createElement('span'); r2.className='r'; r2.textContent=String(Math.round(v.y)); col.appendChild(r1); col.appendChild(r2); coord.appendChild(col); coord.addEventListener('click',()=>startEdit(coord)); row.appendChild(coord); rows.appendChild(row); }
-function startEdit(coordEl){ if(coordEl.classList.contains('editing')) return; coordEl.classList.add('editing'); const id=coordEl.dataset.id; const v=state[id]; const input=document.createElement('input'); input.value=`${Math.round(v.x)} ${Math.round(v.y)}`; coordEl.textContent=''; coordEl.appendChild(input); input.focus(); input.select(); input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const ok=applyInput(id,input.value); coordEl.classList.remove('editing'); if(ok) updateAll(); } else if(e.key==='Escape'){ coordEl.classList.remove('editing'); updateAll(); } }); input.addEventListener('blur',()=>{ coordEl.classList.remove('editing'); updateAll(); }); }
-function applyInput(id,str){ try{ const s=str.replace(/[()]/g,'').trim(); if(s.includes('/')) return false; const pieces=s.split(/[\s,]+/).filter(Boolean); if(pieces.length<2) return false; const x=parseInt(pieces[0],10), y=parseInt(pieces[1],10); if(!Number.isInteger(x)||!Number.isInteger(y)) return false; if(!state[id]) return false; state[id].x=clamp(x,-R,R); state[id].y=clamp(y,-R,R); if(id==='Tv1'||id==='Tv2'){ const dest=snapToBasis(state[id],state.w1,state.w2,true); state[id].x=dest.x; state[id].y=dest.y; tvWeights[id]={a:dest.coeff[0],b:dest.coeff[1]}; } if(id==='w1'||id==='w2'){ recomputeTvWeights(); } if(id==='P'){ updateP(); updateTP(); } return true; }catch(_){ return false; } }
+function renderRow(id,color){ const row=document.createElement('div'); row.className='row'; if(/^Tv[12]$/.test(id)){ row.appendChild(document.createTextNode('T')); row.appendChild(badgeSpan(id.replace('Tv','v'))); row.appendChild(document.createTextNode(':')); const coord=document.createElement('div'); coord.className='coord coord-vec'; coord.dataset.id=id; coord.innerHTML=`<div>${state[id].x}, ${state[id].y}</div>`; coord.addEventListener('click',()=>startEdit(coord)); row.appendChild(coord); rows.appendChild(row); return; } row.appendChild(badgeSpan(id)); row.appendChild(document.createTextNode(':')); const coord=document.createElement('div'); coord.className='coord coord-vec'; coord.dataset.id=id; coord.innerHTML=`<div>${state[id].x}, ${state[id].y}</div>`; coord.addEventListener('click',()=>startEdit(coord)); row.appendChild(coord); rows.appendChild(row); }
+function startEdit(coordEl){ if(coordEl.classList.contains('editing')) return; coordEl.classList.add('editing'); const id=coordEl.dataset.id; const v=state[id]; const input=document.createElement('input'); input.type='text'; input.value=`${Math.round(v.x)}, ${Math.round(v.y)}`; coordEl.innerHTML=''; coordEl.appendChild(input); input.focus(); input.select(); function done(){ coordEl.classList.remove('editing'); if(applyInput(id,input.value)) coordEl.innerHTML=`<div>${state[id].x}, ${state[id].y}</div>`; else coordEl.innerHTML=`<div>${v.x}, ${v.y}</div>`; } input.addEventListener('blur',done); input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ done(); pushStateToUrl(); } }); }
+function applyInput(id,str){ try{ const s=str.replace(/[()]/g,'').trim(); if(s.includes('/')) return false; const pieces=s.split(/[\s,]+/).filter(Boolean); if(pieces.length<2) return false; const x=parseFloat(pieces[0]); const y=parseFloat(pieces[1]); if(Number.isNaN(x)||Number.isNaN(y)) return false; state[id].x=clamp(x,-R,R); state[id].y=clamp(y,-R,R); if(id==='v1'||id==='v2') initTvWeights(); if(/^Tv[12]$/.test(id)) recomputeTvWeights(); updateAll(); pushStateToUrl(); return true; }catch(e){return false;} }
 
-function renderWeightsRow(id){ const row=document.createElement('div'); row.className='row'; row.appendChild(document.createTextNode('T')); row.appendChild(badgeSpan(id.replace('Tv','v'))); row.appendChild(document.createTextNode(' = ')); const aSpan=document.createElement('span'); aSpan.className='coord'; aSpan.dataset.weightFor=id; aSpan.dataset.which='a'; const bSpan=document.createElement('span'); bSpan.className='coord'; bSpan.dataset.weightFor=id; bSpan.dataset.which='b'; const ab=tvWeights[id]; aSpan.textContent=fmtQ(ab.a); bSpan.textContent=fmtQ(ab.b); aSpan.addEventListener('click',()=>startEditWeight(aSpan)); bSpan.addEventListener('click',()=>startEditWeight(bSpan)); row.appendChild(aSpan); row.appendChild(document.createTextNode(' ')); const w1b=badgeSpan('w1'); w1b.style.background='var(--cyan-soft)'; w1b.style.color='var(--cyan-dark)'; row.appendChild(w1b); row.appendChild(document.createTextNode(' + ')); row.appendChild(bSpan); const w2b=badgeSpan('w2'); w2b.style.background='var(--cyan-soft)'; w2b.style.color='var(--cyan-dark)'; row.appendChild(document.createTextNode(' ')); row.appendChild(w2b); rows.appendChild(row); }
-function startEditWeight(el){ if(el.classList.contains('editing')) return; el.classList.add('editing'); const id=el.dataset.weightFor, which=el.dataset.which; const input=document.createElement('input'); input.value=el.textContent; el.textContent=''; el.appendChild(input); input.focus(); input.select(); input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const s=input.value.trim(); let val; const slash=s.indexOf('/'); if(slash>-1){ const nn=parseInt(s.slice(0,slash),10), dd=parseInt(s.slice(slash+1),10); val=(dd!==0)?(nn/dd):NaN; } else { val=parseFloat(s); } if(!Number.isNaN(val)) applyWeight(id,which,val); const dest=snapToBasis(state[id],state.w1,state.w2,true); animateSnap(id,dest,dest.coeff,'Tv',()=>{ tvWeights[id]={a:dest.coeff[0],b:dest.coeff[1]}; updateAll();}); el.classList.remove('editing'); } else if(e.key==='Escape'){ el.classList.remove('editing'); updateAll(); } }); input.addEventListener('blur',()=>{ el.classList.remove('editing'); updateAll(); }); }
-function applyWeight(id,which,val){ if(!state[id]) return; let a=tvWeights[id].a, b=tvWeights[id].b; if(which==='a') a=val; else b=val; tvWeights[id]={a:a,b:b}; const w1=state.w1,w2=state.w2; state[id].x=a*w1.x + b*w2.x; state[id].y=a*w1.y + b*w2.y; updateTP(); }
+function renderWeightsRow(id){ const row=document.createElement('div'); row.className='row'; row.appendChild(document.createTextNode('T')); row.appendChild(badgeSpan(id.replace('Tv','v'))); row.appendChild(document.createTextNode(':')); const wdiv=document.createElement('div'); wdiv.className='coord'; wdiv.dataset.weightFor=id; wdiv.innerHTML=`<div>${Math.round(tvWeights[id].a)}, ${Math.round(tvWeights[id].b)}</div>`; wdiv.addEventListener('click',()=>startEditWeight(wdiv)); row.appendChild(wdiv); rows.appendChild(row); }
+function startEditWeight(el){ if(el.classList.contains('editing')) return; el.classList.add('editing'); const id=el.dataset.weightFor, val=tvWeights[id]; const input=document.createElement('input'); input.type='text'; input.value=`${Math.round(val.a)}, ${Math.round(val.b)}`; el.innerHTML=''; el.appendChild(input); input.focus(); input.select(); function done(){ el.classList.remove('editing'); const ok=applyWeight(id,'ab',input.value); el.innerHTML=`<div>${Math.round(tvWeights[id].a)}, ${Math.round(tvWeights[id].b)}</div>`; if(ok) pushStateToUrl(); } input.addEventListener('blur',done); input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ done(); } }); }
+function applyWeight(id,which,val){ if(!state[id]) return false; try{ const s=String(val).replace(/[()]/g,'').trim(); const pieces=s.split(/[\s,]+/).filter(Boolean); if(pieces.length<2) return false; const a=parseFloat(pieces[0]); const b=parseFloat(pieces[1]); if(Number.isNaN(a)||Number.isNaN(b)) return false; tvWeights[id]={a:a,b:b}; // update TV world positions based on v-basis
+ const V=getV(); const w1=state.w1,w2=state.w2; state[id].x = a*V[0][0] + b*V[0][1]; state[id].y = a*V[1][0] + b*V[1][1]; updateAll(); return true; }catch(e){return false;} }
 
-function renderReadout(){ rows.innerHTML=''; renderMatrix(); renderWeightsRow('Tv1'); renderWeightsRow('Tv2'); renderRow('v1','blue'); renderRow('v2','blue'); renderRow('w1','cyan'); renderRow('w2','cyan'); renderRow('Tv1','blue'); renderRow('Tv2','blue'); }
+function renderReadout(){ rows.innerHTML=''; renderMatrix(); renderWeightsRow('Tv1'); renderWeightsRow('Tv2'); renderRow('v1','blue'); renderRow('v2','blue'); renderRow('w1','cyan'); renderRow('w2','cyan'); renderRow('P'); }
 
 // drawing P + TP and everything
 function updateP(){ const Px=state.P.x, Py=state.P.y; Ppath.setAttribute('d',buildPPathD(Px,Py)); const tip=worldToPx({x:Px,y:Py}); const base=worldToPx({x:Px*.85,y:Py*.85}); Phit.setAttribute('x1',base.x); Phit.setAttribute('y1',base.y); Phit.setAttribute('x2',tip.x); Phit.setAttribute('y2',tip.y); }
@@ -286,7 +281,7 @@ function updateAll(){ ['v1','v2','w1','w2','Tv1','Tv2'].forEach(updateVector); i
 
 // controls
 const btnStd=document.getElementById('btnStd'); const btnV=document.getElementById('btnV'); const btnW=document.getElementById('btnW');
-document.getElementById('resetBtn').addEventListener('click',()=>{ Object.keys(state).forEach(k=>{ state[k].x=initState[k].x; state[k].y=initState[k].y; }); initTvWeights(); updateAll(); });
+document.getElementById('resetBtn').addEventListener('click',()=>{ Object.keys(state).forEach(k=>{ state[k].x=initState[k].x; state[k].y=initState[k].y; }); initTvWeights(); updateAll(); pushStateToUrl(); });
 const flags={std:true,v:false,w:false};
 function updateBtnStates(){ btnStd.style.opacity=flags.std?1:0.5; btnV.style.opacity=flags.v?1:0.5; btnW.style.opacity=flags.w?1:0.5; }
 function toggleGrid(group,key,draw){ flags[key]=!flags[key]; if(flags[key]){ draw(); group.style.display='block'; } else { group.style.display='none'; group.innerHTML=''; } updateBtnStates(); }
@@ -302,6 +297,48 @@ initTvWeights(); drawStdGrid(); updateBtnStates(); updateAll();
   console.assert(VECTOR_IDS.has('v1') && VECTOR_IDS.has('Tv2'), 'vector id set');
   // ensure no crash when clicking P hit first
   (function(){ const tmp=dragTarget; dragTarget='P'; const beforeX=state.P.x; state.P.x=beforeX; dragTarget=tmp; })();
+})();
+</script>
+
+<script>
+// Persist state into the URL query string and restore it on load.
+(function(){
+  function serializeState(){
+    const params = new URLSearchParams();
+    function setVec(name,obj){ params.set(name, `${obj.x},${obj.y}`); }
+    setVec('v1', state.v1); setVec('v2', state.v2); setVec('w1', state.w1); setVec('w2', state.w2);
+    setVec('Tv1', state.Tv1); setVec('Tv2', state.Tv2); setVec('P', state.P);
+    // tvWeights
+    params.set('tw1', `${tvWeights.Tv1.a},${tvWeights.Tv1.b}`);
+    params.set('tw2', `${tvWeights.Tv2.a},${tvWeights.Tv2.b}`);
+    return params.toString();
+  }
+
+  window.pushStateToUrl = function(){ try{ const s = serializeState(); const newUrl = (s.length? ('?' + s) : location.pathname); history.replaceState(null, '', newUrl); }catch(e){console.warn('pushStateToUrl failed',e);} };
+
+  function parseVec(str){ if(!str) return null; const parts=str.split(/[\\s,]+/).filter(Boolean); if(parts.length<2) return null; const x=parseFloat(parts[0]); const y=parseFloat(parts[1]); if(Number.isNaN(x)||Number.isNaN(y)) return null; return {x:x,y:y}; }
+
+  function loadStateFromUrl(){ try{
+      const params = new URLSearchParams(location.search);
+      const keys = ['v1','v2','w1','w2','Tv1','Tv2','P'];
+      let changed=false;
+      keys.forEach(k=>{ const s=params.get(k); if(s){ const v=parseVec(s); if(v){ state[k].x=clamp(v.x,-R,R); state[k].y=clamp(v.y,-R,R); changed=true; } } });
+      const tw1 = params.get('tw1'); const tw2 = params.get('tw2'); if(tw1){ const p=tw1.split(/[\\s,]+/).filter(Boolean); if(p.length>=2){ const a=parseFloat(p[0]), b=parseFloat(p[1]); if(isFinite(a)&&isFinite(b)){ tvWeights.Tv1={a:a,b:b}; changed=true; } } }
+      if(tw2){ const p=tw2.split(/[\\s,]+/).filter(Boolean); if(p.length>=2){ const a=parseFloat(p[0]), b=parseFloat(p[1]); if(isFinite(a)&&isFinite(b)){ tvWeights.Tv2={a:a,b:b}; changed=true; } } }
+      if(changed){ // recompute dependent values
+        // if weights were provided, update Tv positions according to v-basis and weights
+        const V=getV(); ['Tv1','Tv2'].forEach((id,i)=>{ const w = tvWeights[id]; state[id].x = w.a*V[0][0] + w.b*V[0][1]; state[id].y = w.a*V[1][0] + w.b*V[1][1]; });
+        // ensure tvWeights consistent with w-basis
+        recomputeTvWeights(); updateAll(); }
+    }catch(e){console.warn('loadStateFromUrl failed',e);} }
+
+  // push URL on pointerup and when inputs are edited via keyboard or blur
+  plane.addEventListener('pointerup', ()=>{ setTimeout(()=>{ pushStateToUrl(); }, 0); });
+  document.addEventListener('focusout', (e)=>{ const t=e.target; if(t && t.tagName==='INPUT'){ setTimeout(()=>{ pushStateToUrl(); },0); } });
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ const t=document.activeElement; if(t && t.tagName==='INPUT'){ setTimeout(()=>{ pushStateToUrl(); },0); } } });
+
+  // run load after a tick so other init code runs first
+  setTimeout(loadStateFromUrl, 0);
 })();
 </script>
 <script> window.MathJax = { chtml: { scale: 0.75 } }; </script> 
