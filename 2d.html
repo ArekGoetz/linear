@@ -202,7 +202,7 @@ function renderMatrix() {
     const l1 = 0.5 * (tr + s), l2 = 0.5 * (tr - s);
     eigRow.innerHTML = `
       \\( \\lambda_1 = ${fmt2(l1)} ,\\; 
-      \\lambda_2 = ${fmt2(l2)} \\)
+      \\lambda_2 = ${fmt2(l2)}  \\\\ A = C^{-1} D C \\)
     `;
   }
   eigsEl.appendChild(eigRow);
@@ -236,7 +236,7 @@ function renderMatrix() {
   const r3 = document.createElement('div');
   r3.className = 'row';
   r3.innerHTML = `
-    \\( M(T,\\, w,\\, w) = \\begin{bmatrix} 
+    \\( D = M(T,\\, w,\\, w) = \\begin{bmatrix} 
     ${fmtQ(M_T_ww[0][0])} & ${fmtQ(M_T_ww[0][1])} \\\\ 
     ${fmtQ(M_T_ww[1][0])} & ${fmtQ(M_T_ww[1][1])} 
     \\end{bmatrix} \\)
