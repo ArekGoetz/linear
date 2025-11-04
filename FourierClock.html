@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Polygon – Rubber Physics (Sliders v11)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root{ --pane-w:120px; }
+        body { margin: 0; overflow: hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif; background: #f5f6f8; color: #222; }
+        #canvas-pane { width: 100vw; height: 100vh; position: relative; }
+        #main-canvas { width: 100%; height: 100%; display: block; }
+        #info-pane {
+            position: absolute; top: 0; right: 0; width: var(--pane-w);
+            background: rgba(250,250,250,0.8);
+            padding: 8px; box-sizing: border-box; border-left: 1px solid #ddd; font-size: 11px;
+            backdrop-filter: blur(2px);
+        }
+        #info-pane input[type="text"] { width: 100%; box-sizing: border-box; }
+        .num3 { width: 3ch; padding: 2px; }
+        #info-pane .row { margin-bottom: 6px; display: grid; grid-template-columns: 1fr; gap: 4px; align-items: center; }
+        #info-pane .val { font-variant-numeric: tabular-nums; }
+        .slider { width: 100%; accent-color:#888; }
+        .hint { color:#666; font-size:10px; }
+        .sep { height:1px; background:#e5e5e5; margin:6px 0; }
+        #error-banner { position:absolute; left:0; bottom:0; right:0; background:#ffebe9; color:#b00020; padding:6px 8px; font-size:12px; border-top:1px solid #ffb4a9; display:none; }
+        .disclosure { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+        .chev { transition: transform .15s ease; font-size:12px; }
+        .collapsed .chev { transform: rotate(-90deg); }
+    </style>
+</head>
+<body>
+<div id="canvas-pane">
+    <canvas id="main-canvas"></canvas>
+    <div id="info-pane">
+        <div class="row">
+            <label for="dim-input">vertices</label>
+            <input type="text" id="dim-input" class="num3" maxlength="3" value="5" />
+        </div>
+        <div class="row">
+            <label for="exp-input">exp</label>
+            <input type="text" id="exp-input" class="num3" maxlength="3" value="1" />
+            <div class="hint">1..(n-1); order roots by k⋅exp</div>
+        </div>
+        <div id="disclosure" class="row disclosure"><span class="chev">▾</span><strong>controls</strong></div>
+        <div id="controls">
+            <div class="row hint">Material stiffness (soft ⟷ rigid)</div>
+            <input id="stiff-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.55" />
+            <div class="row"><span class="hint">spring×</span><span id="stiff-read" class="val">—</span></div>
+
+            <div class="sep"></div>
+            <div class="row hint">Spread of motion (local ⟷ global)</div>
+            <input id="lambda-slider" class="slider" type="range" min="0.05" max="4.50" step="0.01" />
+            <div class="row"><span class="hint">λ (decay)</span><span id="lambda-read" class="val">—</span></div>
+
+            <div class="sep"></div>
+            <div class="row hint">Damping (bouncy ⟷ syrupy)</div>
+            <input id="damp-slider" class="slider" type="range" min="0" max="1" step="0.01" />
+            <div class="row"><span class="hint">damping</span><span id="damp-read" class="val">—</span></div>
+
+            <div class="sep"></div>
+            <div class="row hint">Memory (springy ⟷ clay)</div>
+            <input id="memory-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.15" />
+            <div class="row"><span class="hint">plastic rate ρ</span><span id="memory-read" class="val">—</span></div>
+        </div>
+        <div class="sep"></div>
+        <div class="row"><span class="hint">accel |a|</span><span id="a-val" class="val">0.00</span></div>
+        <div class="row"><span class="hint">rigidity s(a)</span><span id="s-val" class="val">1.00</span></div>
+        <div class="row"><span class="hint">drag index</span><span id="d-val" class="val">-</span></div>
+        <div class="row hint">Click the gray ring to freeze & forget (no dynamics) until a vertex is dragged.</div>
+    </div>
+    <div id="error-banner"></div>
+</div>
+
+<script>
+// ========================== Error banner ===========================
+(function(){
+  const banner = document.getElementById('error-banner');
+  window.addEventListener('error', (e)=>{
+    banner.style.display = 'block';
+    banner.textContent = 'Error: ' + (e.message || e.toString());
+  });
+})();
+
+/* -------------------------- Complex utilities -------------------------- */
+class Complex {
+    constructor(re = 0, im = 0) { this.re = re; this.im = im; }
+    add(o) { return new Complex(this.re + o.re, this.im + o.im); }
+    sub(o) { return new Complex(this.re - o.re, this.im - o.im); }
+    mul(o) { return new Complex(this.re * o.re - this.im * o.im, this.re * o.im + this.im * o.re); }
+    scale(s) { return new Complex(this.re * s, this.im * s); }
+    divScalar(s) { return new Complex(this.re / s, this.im / s); }
+    mag() { return Math.hypot(this.re, this.im); }
+}
+
+/* -------------------------- Globals and state -------------------------- */
+let dim = 5;
+let expStep = 1; // ordering exponent
+let vertices = [];      // positions (Complex)
+let velocities = [];    // per-vertex velocities (Complex)
+let restEdge = [];      // rest edge lengths (plastic)
+let restLap = [];       // rest curvature (discrete Laplacian) for plastic curvature
+let dragging = -1;
+
+// Fourier baseline scale used to normalize eigenpolygon sizes
+let baseScale = 0.9;
+
+let prevMouse = null;   // Complex
+let mouseTarget = null; // Complex
+let mouseVel = new Complex(0, 0);
+let prevMouseVel = new Complex(0, 0);
+let lastMouseTime = 0;
+let smoothedAMag = 0;   // scalar |a|
+
+let isFrozen = false;       // true => physics disabled
+let hardFrozen = false;     // true => remain frozen until a vertex drag begins
+let initialCOM = new Complex(0,0);
+let initialDiameter = 1;    // diameter baseline (soft preservation)
+// Soft diameter preservation via global radial force (no hard constraint)
+// Toggle strength with phys.kRadial (scaled by stiffness).
+
+// ===== Fourier user control state =====
+let userCoeffs = null;     // when non-null, live spectral override used (disc drag)
+let draggingDisc = -1;     // disc index being dragged (>=1), -1 otherwise
+let lastDiscPointer = null; // last pointer for radial/tangential classification
+
+const aSmooth = 0.85;   // accel smoothing factor
+
+const main_canvas = document.getElementById('main-canvas');
+const dim_input = document.getElementById('dim-input');
+const exp_input = document.getElementById('exp-input');
+const a_val = document.getElementById('a-val');
+const s_val = document.getElementById('s-val');
+const d_val = document.getElementById('d-val');
+const stiffSlider = document.getElementById('stiff-slider');
+const stiffRead = document.getElementById('stiff-read');
+const lambdaSlider = document.getElementById('lambda-slider');
+const lambdaRead = document.getElementById('lambda-read');
+const dampSlider = document.getElementById('damp-slider');
+const dampRead = document.getElementById('damp-read');
+const memorySlider = document.getElementById('memory-slider');
+const memoryRead = document.getElementById('memory-read');
+const disclosure = document.getElementById('disclosure');
+const controls = document.getElementById('controls');
+
+/* -------------------------- Parameters -------------------------- */
+const phys = {
+    mass: 1.0,
+    kEdge: 180,
+    kBend: 24,
+    damping: 10.0,
+    kFollowBase: 420,
+    lambda: 0.9,
+    a0: 40.0,
+    rho: 0.0,
+    kRadial: 90.0 // softer diameter keeper than before
+};
+
+// Ranges used by sliders (wider)
+const ranges = {
+    kEdge:   [30, 1200],   // +50%
+    kBend:   [3, 240],     // +50%
+    kFollow: [75, 1800],   // +50%
+    damping: [0.0, 90.0],  // +50%
+    rho:     [0.0, 18.0]   // +50%
+};
+
+function lerp(a,b,t){ return a + (b-a)*t; }
+function applyStiff(t){
+    phys.kEdge =   lerp(ranges.kEdge[0],   ranges.kEdge[1],   t);
+    phys.kBend =   lerp(ranges.kBend[0],   ranges.kBend[1],   t);
+    phys.kFollowBase = lerp(ranges.kFollow[0], ranges.kFollow[1], t);
+    phys.kRadial = lerp(40, 450, t);
+    stiffRead.textContent = `${phys.kEdge.toFixed(0)} / ${phys.kBend.toFixed(0)} / ${phys.kFollowBase.toFixed(0)} / R:${phys.kRadial.toFixed(0)}`;
+}
+function applyDamping(t){
+    phys.damping = lerp(ranges.damping[0], ranges.damping[1], t);
+    dampRead.textContent = phys.damping.toFixed(2);
+}
+function applyMemory(t){
+    phys.rho = lerp(ranges.rho[0], ranges.rho[1], t);
+    memoryRead.textContent = `${phys.rho.toFixed(2)} s⁻¹`;
+}
+
+// default λ depends on number of vertices (smaller n → larger λ)
+function lambdaDefault(n){
+    const val = 9 / Math.max(3,n) + 0.15;
+    return Math.max(0.05, Math.min(3.0, val));
+}
+
+/* default damping slider position as a function of dim
+   - at n=5 → 2.5% of scale
+   - grows linearly to 50% by n=60, then clamped at 50% */
+function dampingDefaultFraction(n){
+    const n0 = 5, n1 = 60;
+    if (n <= n0) return 0.025;
+    if (n >= n1) return 0.50;
+    const t = (n - n0) / (n1 - n0);
+    return 0.025 + t * (0.50 - 0.025);
+}
+
+/* s(a) = 1 / (1 + (a/a0)^2) */
+function rigidityFromAccel(aMag) {
+    const r = 1 / (1 + (aMag / phys.a0) * (aMag / phys.a0));
+    return Math.max(0.0, Math.min(1.0, r));
+}
+
+/* -------------------------- UI wiring -------------------------- */
+stiffSlider.addEventListener('input', () => applyStiff(parseFloat(stiffSlider.value)));
+lambdaSlider.addEventListener('input', () => { phys.lambda = parseFloat(lambdaSlider.value); lambdaRead.textContent = phys.lambda.toFixed(2); });
+dampSlider.addEventListener('input', () => applyDamping(parseFloat(dampSlider.value)));
+memorySlider.addEventListener('input', () => applyMemory(parseFloat(memorySlider.value)));
+
+disclosure.addEventListener('click', () => {
+    controls.style.display = controls.style.display === 'none' ? 'block' : 'none';
+    disclosure.classList.toggle('collapsed', controls.style.display === 'none');
+});
+
+// init expanded
+controls.style.display = 'block';
+
+dim_input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        let new_dim = parseInt(dim_input.value);
+        if (!isNaN(new_dim)) {
+            new_dim = Math.max(3, Math.min(100, new_dim));
+            dim = new_dim;
+            // clip exp to 1..dim-1
+            expStep = Math.max(1, Math.min(dim-1, Math.min(100, parseInt(exp_input.value)||1)));
+            initVertices();
+            updateCanvasSizes();
+            phys.lambda = lambdaDefault(dim);
+            lambdaSlider.value = String(phys.lambda.toFixed(2));
+            lambdaRead.textContent = phys.lambda.toFixed(2);
+            // set damping default from dim
+            const dFrac = dampingDefaultFraction(dim);
+            dampSlider.value = String(dFrac);
+            applyDamping(dFrac);
+            // drop any spectral overrides on dimension change
+            userCoeffs = null; draggingDisc = -1;
+        }
+    }
+});
+
+exp_input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        let v = parseInt(exp_input.value);
+        if (isNaN(v)) v = 1;
+        v = Math.max(1, Math.min(Math.min(100, dim-1), v));
+        expStep = v;
+        exp_input.value = String(v);
+        initVertices();
+        userCoeffs = null; draggingDisc = -1; // keep P and exp in sync
+    }
+});
+
+/* -------------------------- Initialization -------------------------- */
+function initVertices() {
+    vertices = [];
+    velocities = [];
+    restEdge = [];
+    baseScale = 0.9; // baseline radius used for DFT normalization
+    // reordered roots of unity by k*exp (mod dim)
+    for (let m = 0; m < dim; m++) {
+        const k = (m * expStep) % dim;
+        const theta = (2 * Math.PI * k) / dim;
+        vertices.push(new Complex(baseScale * Math.cos(theta), baseScale * Math.sin(theta)));
+        velocities.push(new Complex(0, 0));
+    }
+    for (let i = 0; i < dim; i++) {
+        const j = (i + 1) % dim;
+        restEdge[i] = vertices[j].sub(vertices[i]).mag();
+    }
+    // initialize curvature rest state
+    restLap = new Array(dim);
+    for (let i = 0; i < dim; i++) {
+        const ip = (i - 1 + dim) % dim, inext = (i + 1) % dim;
+        const lap = vertices[ip].add(vertices[inext]).sub(vertices[i].scale(2));
+        restLap[i] = new Complex(lap.re, lap.im);
+    }
+    initialCOM = computeCOM();
+    initialDiameter = computeDiameter();
+    dragging = -1;
+    prevMouse = null; mouseTarget = null; mouseVel = new Complex(0, 0); prevMouseVel = new Complex(0, 0);
+    smoothedAMag = 0; isFrozen = false; hardFrozen = false;
+    d_val.textContent = '-';
+}
+
+function updateCanvasSizes() { const ww = window.innerWidth; const wh = window.innerHeight; main_canvas.width = ww; main_canvas.height = wh; }
+
+/* -------------------------- Fourier / DFT -------------------------- */
+function getDFTCoeffs() {
+    // c_k = (1/dim) * sum_m P_m * exp(-i 2π k m/dim)
+    const coeffs = new Array(dim);
+    for (let k = 0; k < dim; k++) {
+        let re = 0, im = 0;
+        for (let m = 0; m < dim; m++) {
+            const theta = -2 * Math.PI * k * m / dim;
+            const cs = Math.cos(theta), sn = Math.sin(theta);
+            const x = vertices[m].re, y = vertices[m].im;
+            re += x * cs - y * sn;
+            im += x * sn + y * cs;
+        }
+        coeffs[k] = new Complex(re / dim, im / dim);
+    }
+    return coeffs;
+}
+
+// IDFT: vertices from coefficients (honoring our forward DFT definition)
+function setVerticesFromCoeffs(coeffs){
+  const n = dim; const out = new Array(n);
+  for (let m=0;m<n;m++){
+    let re=0, im=0;
+    for (let k=0;k<n;k++){
+      const theta = 2*Math.PI*k*m/n; const cs = Math.cos(theta), sn = Math.sin(theta);
+      const ck = coeffs[k] || {re:0, im:0}; re += ck.re*cs - ck.im*sn; im += ck.re*sn + ck.im*cs;
+    }
+    out[m] = new Complex(re, im);
+  }
+  for (let m=0;m<n;m++) vertices[m] = out[m];
+}
+
+/* -------------------------- Disc helpers for interaction -------------------------- */
+function discParams(){
+  const w = main_canvas.width, h = main_canvas.height; const cx = w/2, cy = h/2;
+  const r_outer = Math.min(w/2, h/2), r_inner = r_outer * 0.73; const pad = 2;
+  const r_mid = (r_outer + r_inner)/2; const halfThick = (r_outer - r_inner)/2;
+  const chord = 2 * r_mid * Math.sin(Math.PI / Math.max(3, dim));
+  const R_radial = Math.max(0, halfThick - pad);
+  const R_angular = Math.max(0, (chord - pad) / 2);
+  const Rdisc = Math.max(0, Math.min(R_radial, R_angular));
+  const rInnerDisc = Rdisc * 0.75;
+  return {cx, cy, r_outer, r_inner, r_mid, Rdisc, rInnerDisc};
+}
+function discCenter(k){ const {cx, cy, r_mid} = discParams(); const theta = -(2*Math.PI*k)/dim; return {x: cx + r_mid*Math.cos(theta), y: cy + r_mid*Math.sin(theta)}; }
+function hitTestDiscIndex(e){
+  const rect = main_canvas.getBoundingClientRect(); const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+  const {Rdisc} = discParams();
+  for (let k=0;k<dim;k++){
+    const c = discCenter(k); const dx = mx - c.x, dy = my - c.y; if (dx*dx + dy*dy <= Rdisc*Rdisc) return k;
+  }
+  return -1;
+}
+
+// Update a single Fourier coefficient c_k based on a pointer inside disc k.
+// - If the pointer motion is more radial -> change |c_k| only.
+// - If more tangential -> change arg(c_k) only.
+// Amplitude is mapped from radius with inner gray circle as unit; capped at 1.25.
+function updateCoeffFromPointer(k, mx, my, classifyByDelta=true){
+  if (k <= 0 || k >= dim) return; // k=0 locked (COM)
+  const { rInnerDisc, Rdisc } = discParams();
+  if (!userCoeffs) userCoeffs = getDFTCoeffs();
+  // lock COM
+  userCoeffs[0] = new Complex(0,0);
+
+  const center = discCenter(k); const dx = mx - center.x, dy = my - center.y; const r = Math.hypot(dx,dy);
+  // If near center (<=5% of disc radius), treat as intent to zero the coefficient
+  const zeroTol = 0.05 * Rdisc;
+  if (r <= zeroTol) {
+    userCoeffs[k] = new Complex(0,0);
+    setVerticesFromCoeffs(userCoeffs);
+    return;
+  }
+
+  // Radial/tangential basis
+  const ux = dx/r, uy = dy/r;      // radial unit
+  const tx = -uy, ty = ux;         // tangential (CCW) unit
+  let radialDominant = true;
+  if (classifyByDelta && lastDiscPointer){
+    const ddx = mx - lastDiscPointer.x, ddy = my - lastDiscPointer.y;
+    const pr = Math.abs(ddx*ux + ddy*uy);   // radial component of delta
+    const pt = Math.abs(ddx*tx + ddy*ty);   // tangential component of delta
+    radialDominant = (pr >= pt);
+  }
+
+  const ck0 = userCoeffs[k] || new Complex(0,0);
+  let amp = Math.hypot(ck0.re, ck0.im);
+  let phase = Math.atan2(ck0.im, ck0.re);
+
+  const cap = 1.25; // hard cap on |c_k|
+  if (radialDominant){
+    const ampNorm = r / Math.max(1e-6, rInnerDisc); // radius relative to inner gray circle
+    amp = Math.max(0, Math.min(cap, ampNorm * baseScale));
+  } else {
+    // pointer angle in math coords (y up)
+    phase = Math.atan2(-dy, dx);
+  }
+  userCoeffs[k] = new Complex(amp * Math.cos(phase), amp * Math.sin(phase));
+
+  // Rebuild P immediately from edited spectrum
+  setVerticesFromCoeffs(userCoeffs);
+}
+
+// Reset physics memory to match the CURRENT polygon state (no residual energy)
+function resetPhysicsMemory(){
+    // zero velocities
+    for (let i = 0; i < dim; i++) velocities[i] = new Complex(0,0);
+    // update plastic rest lengths
+    for (let i = 0; i < dim; i++) { const j=(i+1)%dim; restEdge[i] = vertices[j].sub(vertices[i]).mag(); }
+    // update curvature rest state
+    for (let i = 0; i < dim; i++) { const ip=(i-1+dim)%dim, inext=(i+1)%dim; const lap = vertices[ip].add(vertices[inext]).sub(vertices[i].scale(2)); restLap[i] = new Complex(lap.re, lap.im); }
+    // reset global invariants and accelerations
+    initialCOM = computeCOM();
+    initialDiameter = computeDiameter();
+    smoothedAMag = 0; prevMouseVel = new Complex(0,0); mouseVel = new Complex(0,0);
+}
+
+/* -------------------------- Drawing -------------------------- */
+function draw() {
+    const ctx = main_canvas.getContext('2d');
+    const w = main_canvas.width, h = main_canvas.height;
+    const cx = w / 2, cy = h / 2;
+    const view_r = Math.min(w, h) / 2 * 0.8;
+    ctx.clearRect(0, 0, w, h);
+
+    // background ring
+    const r_outer = Math.min(w / 2, h / 2);
+    const r_inner = r_outer * 0.73;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r_outer, 0, Math.PI * 2, false);
+    ctx.moveTo(cx + r_inner, cy);
+    ctx.arc(cx, cy, r_inner, 0, Math.PI * 2, true);
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fill();
+
+    // coefficients for current polygon P (or spectral override if active)
+    const coeffs = userCoeffs || getDFTCoeffs();
+
+    // compute dominant-mode highlighting set (exclude k=0)
+    const mags = new Array(dim).fill(0);
+    let maxMag = 0, secondMag = 0;
+    for (let kk = 1; kk < dim; kk++) {
+        const c = coeffs[kk] || new Complex(0,0);
+        mags[kk] = Math.hypot(c.re, c.im);
+        if (mags[kk] > maxMag) { secondMag = maxMag; maxMag = mags[kk]; }
+        else if (mags[kk] > secondMag) { secondMag = mags[kk]; }
+    }
+    const highlight = new Set();
+    if (maxMag > 0) {
+        const thresh = maxMag * 0.96; // within 4% of largest
+        for (let kk = 1; kk < dim; kk++) if (mags[kk] >= thresh) highlight.add(kk);
+    }
+
+    // draw the WHITE discs around the mid-circle inside the ring
+    const pad = 2; // px minimum clearance and inter-disc gap
+    const r_mid = (r_outer + r_inner) / 2;        // mid radius for centers
+    const halfThick = (r_outer - r_inner) / 2;    // ring half-thickness
+
+    // Maximal radius subject to:
+    //  (A) ≥pad from inner/outer ring boundaries ⇒ R ≤ halfThick - pad
+    //  (B) ≥pad gap between neighbors along the circle: chord ≥ 2R + pad
+    //      chord = 2 r_mid sin(pi/dim) ⇒ R ≤ (chord - pad)/2
+    const chord = 2 * r_mid * Math.sin(Math.PI / Math.max(3, dim));
+    const R_radial = Math.max(0, halfThick - pad);
+    const R_angular = Math.max(0, (chord - pad) / 2);
+    const Rdisc = Math.max(0, Math.min(R_radial, R_angular));
+
+    for (let k = 0; k < dim; k++) {
+        // Use negative angle so labels/discs increase counterclockwise (canvas Y is down)
+        const theta = -(2*Math.PI*k)/dim;
+        const x = cx + r_mid * Math.cos(theta);
+        const y = cy + r_mid * Math.sin(theta);
+        // white disc
+        ctx.beginPath();
+        ctx.arc(x, y, Rdisc, 0, Math.PI*2);
+        ctx.fillStyle = highlight.has(k) ? '#e8ffe8' : '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // thin gray inner circle at 75% radius
+        const rInnerDisc = Rdisc * 0.75;
+        ctx.beginPath();
+        ctx.arc(x, y, rInnerDisc, 0, Math.PI*2);
+        ctx.strokeStyle = '#c6c6c6';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // --- Eigenpolygon inside each white disc (DFT-driven) ---
+        // scale by |c_k| / baseScale (not clamped to gray circle), rotate by arg(c_k)
+        const ck = coeffs[k] || new Complex(0,0);
+        const ampFactor = Math.min(1.25, Math.max(0, (Math.hypot(ck.re, ck.im) + 1e-12) / Math.max(1e-12, baseScale)));
+        const phase = Math.atan2(ck.im, ck.re);
+        const step = k % dim; // connectivity
+
+        const pts = new Array(dim);
+        for (let m = 0; m < dim; m++) {
+            const idx = (m * step) % dim; // zeta^{m*step}
+            const ang = (2 * Math.PI * idx) / dim + phase; // rotate by phase
+            const px = x + (rInnerDisc * ampFactor) * Math.cos(ang);
+            const py = y - (rInnerDisc * ampFactor) * Math.sin(ang);
+            pts[m] = {x: px, y: py};
+        }
+        // edges (last edge dashed)
+        for (let i = 0; i < dim; i++) {
+            const j = (i + 1) % dim;
+            if (i === dim - 1) ctx.setLineDash([10, 3]); else ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        // vertices as black circles, vertex 0 with blue ring
+        const vR = 3;
+        for (let i = 0; i < dim; i++) {
+            ctx.beginPath();
+            ctx.arc(pts[i].x, pts[i].y, vR, 0, Math.PI*2);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            if (i === 0) { ctx.strokeStyle = 'blue'; ctx.lineWidth = 1.5; ctx.stroke(); }
+        }
+        // arrowheads on non-dashed edges (drawn last)
+        for (let i = 0; i < dim - 1; i++) {
+            const j = (i + 1) % dim;
+            const dx = pts[j].x - pts[i].x;
+            const dy = pts[j].y - pts[i].y;
+            const ang = Math.atan2(dy, dx);
+            const headlen = 5;
+            ctx.beginPath();
+            ctx.moveTo(pts[j].x - headlen * Math.cos(ang - Math.PI/6), pts[j].y - headlen * Math.sin(ang - Math.PI/6));
+            ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.lineTo(pts[j].x - headlen * Math.cos(ang + Math.PI/6), pts[j].y - headlen * Math.sin(ang + Math.PI/6));
+            ctx.closePath();
+            ctx.fillStyle = '#bbb';
+            ctx.fill();
+        }
+    }
+
+    // labels 0..dim-1 along the outer boundary, next to each white disc (counterclockwise)
+    ctx.save();
+    ctx.fillStyle = '#777';
+    const labelPx = (dim <= 50 ? 15 : 10);
+    ctx.font = `${labelPx}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const r_lab = r_outer - 2 - 2; // a touch inside the outer boundary
+    for (let k = 0; k < dim; k++) {
+        const theta = -(2*Math.PI*k)/dim;
+        const lx = cx + r_lab * Math.cos(theta);
+        const ly = cy + r_lab * Math.sin(theta);
+        ctx.fillText(String(k), lx, ly);
+    }
+    ctx.restore();
+
+    // polygon edges (lines only) UNDER vertices
+    ctx.lineWidth = 0.5; ctx.strokeStyle = '#555';
+    for (let i = 0; i < dim; i++) {
+        const j = (i + 1) % dim;
+        const x1 = cx + vertices[i].re * view_r;
+        const y1 = cy - vertices[i].im * view_r;
+        const x2 = cx + vertices[j].re * view_r;
+        const y2 = cy - vertices[j].im * view_r;
+        if (i === dim - 1) ctx.setLineDash([20, 5]); else ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // vertices ON TOP of edges
+    const disc_r = 4;
+    for (let i = 0; i < dim; i++) {
+        const x = cx + vertices[i].re * view_r;
+        const y = cy - vertices[i].im * view_r;
+        ctx.beginPath();
+        ctx.arc(x, y, disc_r, 0, 2 * Math.PI);
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        if (i === 0) { ctx.strokeStyle = 'blue'; ctx.lineWidth = 2; ctx.stroke(); }
+    }
+
+    // arrowheads LAST (on top of vertices)
+    for (let i = 0; i < dim-1; i++) { // arrows only on non-dashed edges
+        const j = (i + 1) % dim;
+        const x1 = cx + vertices[i].re * view_r;
+        const y1 = cy - vertices[i].im * view_r;
+        const x2 = cx + vertices[j].re * view_r;
+        const y2 = cy - vertices[j].im * view_r;
+        const dx = x2 - x1, dy = y2 - y1; const angle = Math.atan2(dy, dx); const headlen = 6;
+        ctx.beginPath();
+        ctx.moveTo(x2 - headlen * Math.cos(angle - Math.PI / 6), y2 - headlen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x2 - headlen * Math.cos(angle + Math.PI / 6), y2 - headlen * Math.sin(angle + Math.PI / 6));
+        ctx.closePath(); ctx.fillStyle = '#bbb'; ctx.fill();
+    }
+}
+
+/* -------------------------- Helpers -------------------------- */
+function mouseToComplex(e) {
+    const rect = main_canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+    const w = main_canvas.width, h = main_canvas.height;
+    const cx = w / 2, cy = h / 2; const view_r = Math.min(w, h) / 2 * 0.8;
+    return new Complex((mx - cx) / view_r, (cy - my) / view_r);
+}
+function graphDistance(i, j) { let d = Math.abs(i - j); d = Math.min(d, dim - d); return d; }
+function computeCOM(){ let sx=0, sy=0; for(let i=0;i<dim;i++){ sx+=vertices[i].re; sy+=vertices[i].im; } return new Complex(sx/dim, sy/dim); }
+function computeDiameter(){ let D=0; for(let i=0;i<dim;i++){ for(let j=i+1;j<dim;j++){ const d = vertices[i].sub(vertices[j]).mag(); if (d>D) D=d; } } return D; }
+
+// Reset physics memory to match the CURRENT polygon state (no residual energy)
+function resetPhysicsMemory(){
+    // zero velocities
+    for (let i = 0; i < dim; i++) velocities[i] = new Complex(0,0);
+    // update plastic rest lengths
+    for (let i = 0; i < dim; i++) { const j=(i+1)%dim; restEdge[i] = vertices[j].sub(vertices[i]).mag(); }
+    // update curvature rest state
+    for (let i = 0; i < dim; i++) { const ip=(i-1+dim)%dim, inext=(i+1)%dim; const lap = vertices[ip].add(vertices[inext]).sub(vertices[i].scale(2)); restLap[i] = new Complex(lap.re, lap.im); }
+    // reset global invariants and accelerations
+    initialCOM = computeCOM();
+    initialDiameter = computeDiameter();
+    smoothedAMag = 0; prevMouseVel = new Complex(0,0); mouseVel = new Complex(0,0);
+}
+
+/* -------------------------- Physics step -------------------------- */
+function physicsStep(dt) {
+    if (isFrozen || dim < 3) return;
+
+    const s = rigidityFromAccel(smoothedAMag);
+    s_val.textContent = s.toFixed(2);
+
+    const acc = new Array(dim); for (let i = 0; i < dim; i++) acc[i] = new Complex(0, 0);
+
+    // --- forces ---
+    const comNow = computeCOM();
+    for (let i = 0; i < dim; i++) {
+        if (i === dragging) continue;
+        acc[i] = acc[i].add(velocities[i].scale(-phys.damping));
+        const ip = (i - 1 + dim) % dim; const inext = (i + 1) % dim;
+        const dPrev = vertices[i].sub(vertices[ip]); const lenPrev = dPrev.mag();
+        if (lenPrev > 1e-8) { const stretchPrev = (lenPrev - restEdge[ip]); acc[i] = acc[i].add(dPrev.scale(-phys.kEdge * (stretchPrev / lenPrev))); }
+        const dNext = vertices[i].sub(vertices[inext]); const lenNext = dNext.mag();
+        if (lenNext > 1e-8) { const stretchNext = (lenNext - restEdge[i]); acc[i] = acc[i].add(dNext.scale(-phys.kEdge * (stretchNext / lenNext))); }
+        const lap = vertices[ip].add(vertices[inext]).sub(vertices[i].scale(2));
+        const lapDelta = lap.sub(restLap[i]); acc[i] = acc[i].add(lapDelta.scale(phys.kBend));
+        if (dragging !== -1) { const d = graphDistance(i, dragging); const w = Math.exp(-phys.lambda * d); const follow = vertices[dragging].sub(vertices[i]).scale(phys.kFollowBase * s * w); acc[i] = acc[i].add(follow); }
+        // soft diameter keeper: global radial term
+        const dir = vertices[i].sub(comNow);
+        const D = initialDiameter; const curD = computeDiameter();
+        if (curD > 1e-9) {
+            const k = phys.kRadial * (curD - D) / D; // positive => contract, negative => expand
+            acc[i] = acc[i].add(dir.scale(-k));
+        }
+    }
+
+    // --- integrate ---
+    for (let i = 0; i < dim; i++) {
+        if (i === dragging) { if (mouseTarget) { vertices[i] = mouseTarget; velocities[i] = mouseVel; } continue; }
+        const a = acc[i]; velocities[i] = velocities[i].add(a.scale(dt)); vertices[i] = vertices[i].add(velocities[i].scale(dt));
+    }
+
+    // --- plasticity ---
+    if (phys.rho > 0) {
+        for (let i = 0; i < dim; i++) { const j = (i + 1) % dim; const L = vertices[j].sub(vertices[i]).mag(); restEdge[i] += phys.rho * (L - restEdge[i]) * dt; }
+        // (Curvature rest state only resets on ring click, not continuous creep.)
+    }
+
+    // --- COM constraint (hard) ---
+    const com = computeCOM(); const dx = initialCOM.re - com.re; const dy = initialCOM.im - com.im;
+    if (Math.hypot(dx,dy) > 1e-12) {
+        if (dragging === -1) { for (let i = 0; i < dim; i++) { vertices[i].re += dx; vertices[i].im += dy; } }
+        else {
+            const tScale = dim / (dim - 1); const tx = dx * tScale, ty = dy * tScale;
+            for (let i = 0; i < dim; i++) if (i !== dragging) { vertices[i].re += tx; vertices[i].im += ty; }
+            if (mouseTarget) vertices[dragging] = mouseTarget;
+        }
+    }
+}
+
+/* -------------------------- Animation loop -------------------------- */
+let lastFrameTime = performance.now();
+function animate(now) {
+    const maxStep = 0.03; let dt = Math.min(maxStep, (now - lastFrameTime) / 1000); lastFrameTime = now;
+    // update frequency 2×: smaller substep
+    const h = 1 / 240; while (dt > 1e-6) { const step = Math.min(h, dt); physicsStep(step); dt -= step; }
+    draw(); requestAnimationFrame(animate);
+}
+
+/* -------------------------- Mouse interactions -------------------------- */
+function hitTestVertex(mc){
+    let min_dist = Infinity, closest = -1; const w = main_canvas.width, h = main_canvas.height; const view_r = Math.min(w, h) / 2 * 0.8;
+    for (let i = 0; i < dim; i++) { const d = vertices[i].sub(mc).mag(); if (d < min_dist) { min_dist = d; closest = i; } }
+    const hit = min_dist < 20 / view_r; return {hit, closest};
+}
+
+main_canvas.addEventListener('mousedown', (e) => {
+    const rect = main_canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+    const w = main_canvas.width, h = main_canvas.height; const cx = w/2, cy = h/2; const r_outer = Math.min(w/2, h/2); const r_inner = r_outer*0.73; const r = Math.hypot(x-cx, y-cy);
+
+    // Disc interaction has priority (except disc 0 locked)
+    const discIdx = (typeof hitTestDiscIndex === 'function') ? hitTestDiscIndex(e) : -1;
+    if (discIdx >= 1) {
+        // Begin spectral drag
+        if (!userCoeffs) userCoeffs = getDFTCoeffs();
+        userCoeffs[0] = new Complex(0,0); // keep COM fixed
+        draggingDisc = discIdx;
+        lastDiscPointer = {x, y};
+        isFrozen = true; hardFrozen = false; // pause physics during spectral edits
+        // initialize once using current pointer (no classification)
+        updateCoeffFromPointer(discIdx, x, y, false);
+        d_val.textContent = `disc ${discIdx}`;
+        return;
+    }
+
+    const mc = mouseToComplex(e);
+    const {hit, closest} = hitTestVertex(mc);
+
+    // Click on gray ring (between r_inner and r_outer) => hard freeze & forget memory + curvature
+    if (!hit && r >= r_inner && r <= r_outer) {
+        // Freeze completely until vertex drag; zero energy; forget memory (edges + curvature)
+        isFrozen = true; hardFrozen = true; smoothedAMag = 0; userCoeffs = null; draggingDisc = -1;
+        resetPhysicsMemory();
+        return; // do not start drag
+    }
+
+    // Only unfreeze when actually grabbing a vertex
+    if (hit) {
+        prevMouse = mc; mouseTarget = mc; lastMouseTime = performance.now(); mouseVel = new Complex(0,0); prevMouseVel = new Complex(0,0); smoothedAMag = 0;
+        dragging = closest; d_val.textContent = String(dragging); isFrozen = false; hardFrozen = false; userCoeffs = null; draggingDisc = -1;
+    }
+});
+
+main_canvas.addEventListener('mousemove', (e) => {
+    // Spectral drag in discs
+    if (draggingDisc !== -1) {
+        const rect = main_canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+        updateCoeffFromPointer(draggingDisc, x, y, true);
+        lastDiscPointer = {x, y};
+        return;
+    }
+
+    // Vertex drag on main polygon
+    if (dragging === -1) return;
+    const mc = mouseToComplex(e); const now = performance.now(); const dt = Math.max(1e-4, (now - lastMouseTime) / 1000);
+    const v = mc.sub(prevMouse).divScalar(dt); const aVec = v.sub(prevMouseVel).divScalar(dt); const aMag = aVec.mag(); smoothedAMag = aSmooth * smoothedAMag + (1 - aSmooth) * aMag;
+    mouseTarget = mc; mouseVel = v; prevMouseVel = v; prevMouse = mc; lastMouseTime = now; a_val.textContent = smoothedAMag.toFixed(2);
+});
+
+function endDrag() {
+    if (draggingDisc !== -1) {
+        draggingDisc = -1; lastDiscPointer = null;
+        // keep edited spectrum; resume physics, but reset memory so new P has no stored energy
+        resetPhysicsMemory();
+        isFrozen = false; if (userCoeffs) { /* vertices already synced via IDFT */ }
+        d_val.textContent = '-';
+        return;
+    }
+    if (dragging !== -1) {
+        dragging = -1; d_val.textContent = '-'; prevMouse = null; mouseTarget = null;
+        // Do NOT auto-freeze here; only ring-click should hard-freeze.
+    }
+}
+
+main_canvas.addEventListener('mouseup', endDrag);
+main_canvas.addEventListener('mouseleave', endDrag);
+
+window.addEventListener('resize', () => { updateCanvasSizes(); });
+
+/* -------------------------- Boot -------------------------- */
+updateCanvasSizes();
+initVertices();
+applyStiff(parseFloat(stiffSlider.value));
+// set damping default from initial dim
+const dFrac0 = dampingDefaultFraction(dim); dampSlider.value = String(dFrac0); applyDamping(dFrac0);
+applyMemory(parseFloat(memorySlider.value));
+phys.lambda = lambdaDefault(dim); lambdaSlider.value = String(phys.lambda.toFixed(2)); lambdaRead.textContent = phys.lambda.toFixed(2);
+requestAnimationFrame(animate);
+
+/* -------------------------- Self-tests -------------------------- */
+(function selfTests(){
+  // Test 1: lambdaDefault range
+  for (let n of [3,4,5,8,12,32,128]) { const L = lambdaDefault(n); console.assert(L>=0.05 && L<=3.0, 'lambdaDefault out of range', n, L); }
+  // Test 2: COM holds (no drag)
+  const com0 = computeCOM(); physicsStep(1/240); const com1 = computeCOM(); const err = Math.hypot(com0.re-com1.re, com0.im-com1.im); console.assert(err < 1e-6, 'COM drift too large', err);
+  // Test 3: soft diameter keeper tends to pull toward baseline
+  const d0 = computeDiameter();
+  const c = computeCOM();
+  for (let i = 0; i < dim; i++) { vertices[i].re = c.re + 1.05*(vertices[i].re - c.re); vertices[i].im = c.im + 1.05*(vertices[i].im - c.im); }
+  const dScaled = computeDiameter();
+  for (let k = 0; k < 60; k++) physicsStep(1/240); // give it a bit more time due to softer force
+  const d1 = computeDiameter();
+  console.assert(Math.abs(d1-d0) < Math.abs(dScaled-d0), 'Soft diameter force did not reduce deviation', d0, dScaled, d1);
+  // Test 4: damping default fraction monotonic and capped
+  const f5 = dampingDefaultFraction(5), f30 = dampingDefaultFraction(30), f60 = dampingDefaultFraction(60), f600 = dampingDefaultFraction(600);
+  console.assert(f5 <= f30 && f30 <= f60 && f60 === 0.5 && f600 === 0.5, 'Damping default fraction rule broken', f5, f30, f60, f600);
+  // Test 5: DFT sanity: for regular polygon (current init), |c1| ≈ baseScale and others small
+  const coeffs = getDFTCoeffs();
+  let maxOther = 0; for (let k = 2; k < Math.min(8, dim); k++) maxOther = Math.max(maxOther, Math.hypot(coeffs[k].re, coeffs[k].im));
+  console.assert(Math.abs(Math.hypot(coeffs[1].re, coeffs[1].im) - baseScale) < 1e-3, 'DFT c1 magnitude mismatch');
+  console.assert(maxOther < 1e-2, 'Higher modes not near zero initially');
+  // Test 6: IDFT round-trip
+  const coeffs2 = getDFTCoeffs();
+  const saved = vertices.map(v=>new Complex(v.re,v.im));
+  setVerticesFromCoeffs(coeffs2);
+  let maxErr=0; for(let i=0;i<dim;i++){ maxErr=Math.max(maxErr, Math.hypot(vertices[i].re - saved[i].re, vertices[i].im - saved[i].im)); }
+  console.assert(maxErr < 1e-9, 'IDFT round-trip error too large', maxErr);
+  // restore
+  for(let i=0;i<dim;i++) vertices[i]=saved[i];
+  // Test 7: resetPhysicsMemory zeros velocities and aligns rest states
+  // perturb spectrum, rebuild, then reset and verify
+  userCoeffs = getDFTCoeffs();
+  if (dim >= 4) {
+    const c2 = userCoeffs[2] || new Complex(0,0); userCoeffs[2] = new Complex(c2.re + 0.2, c2.im + 0.1);
+    setVerticesFromCoeffs(userCoeffs);
+    resetPhysicsMemory();
+    let ok=true; for (let i=0;i<dim;i++){ if (velocities[i].mag() !== 0) { ok=false; break; } }
+    console.assert(ok, 'resetPhysicsMemory did not zero velocities');
+    let ok2=true; for (let i=0;i<dim;i++){ const j=(i+1)%dim; const L = vertices[j].sub(vertices[i]).mag(); if (Math.abs(L-restEdge[i])>1e-9){ ok2=false; break; } }
+    console.assert(ok2, 'restEdge not updated by resetPhysicsMemory');
+  }
+  // Test 8: spectral pointer edit modifies c1 and vertices
+  (function(){
+    if (dim >= 3) {
+      const p = discParams(); const c = discCenter(1);
+      const x = c.x + p.rInnerDisc * 0.6, y = c.y; // radial point
+      lastDiscPointer = null; userCoeffs = getDFTCoeffs();
+      const before = vertices.map(v=>new Complex(v.re,v.im));
+      updateCoeffFromPointer(1, x, y, false);
+      let changed = false; for (let i=0;i<dim;i++){ if (Math.hypot(vertices[i].re - before[i].re, vertices[i].im - before[i].im) > 1e-8){ changed = true; break; } }
+      console.assert(changed, 'updateCoeffFromPointer did not change vertices');
+    }
+  })();
+  // Test 9: near-center click zeros coefficient
+  (function(){
+    if (dim >= 3) {
+      userCoeffs = getDFTCoeffs();
+      const c = discCenter(1); const p = discParams();
+      const x = c.x + 0.01 * p.Rdisc, y = c.y; // 1% of Rdisc (within 5%)
+      updateCoeffFromPointer(1, x, y, false);
+      const ck = userCoeffs[1];
+      console.assert(Math.hypot(ck.re, ck.im) < 1e-9, 'Center click did not zero c1');
+    }
+  })();
+  try { draw(); } catch (e) { console.error(e); console.assert(false, 'draw() should not throw'); }
+})();
+</script>
+</body>
+</html>
