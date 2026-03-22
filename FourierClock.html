@@ -12,8 +12,8 @@
         #info-pane {
             position: absolute; top: 0; right: 0; width: var(--pane-w);
             background: rgba(250,250,250,0.8);
-            padding: 8px; box-sizing: border-box; border-left: 1px solid #ddd; font-size: 11px;
-            backdrop-filter: blur(2px);
+            padding: 8px; box-sizing: border-box; border-left: 2px solid #999; font-size: 11px;
+            backdrop-filter: blur(2px); max-height: 95vh; overflow-y: auto;
         }
         #info-pane input[type="text"] { width: 100%; box-sizing: border-box; }
         .num3 { width: 3ch; padding: 2px; }
@@ -26,12 +26,18 @@
         .disclosure { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
         .chev { transition: transform .15s ease; font-size:12px; }
         .collapsed .chev { transform: rotate(-90deg); }
+        #info-pane { cursor: default; transition: width 0.12s ease; }
+        #info-pane.pane-wide { width: 200px; }
+        #info-pane.pane-wide #pane-inner { zoom: 1.75; }
+        /* ew-resize cursor when hovering within 6px of left border */
+        #info-pane:hover { cursor: default; }
     </style>
 </head>
 <body>
 <div id="canvas-pane">
     <canvas id="main-canvas"></canvas>
     <div id="info-pane">
+    <div id="pane-inner">
         <div class="row">
             <label for="dim-input">vertices</label>
             <input type="text" id="dim-input" class="num3" maxlength="3" value="5" />
@@ -63,15 +69,21 @@
             <div class="row"><span class="hint">plastic rate ρ</span><span id="memory-read" class="val">—</span></div>
 
             <div class="sep"></div>
-            <div class="row hint">Midpoint polygon iterates</div>
-            <input id="midpoint-slider" class="slider" type="range" min="0" max="30" step="1" value="0" />
+            <div class="row hint">Averaging polygon iterates</div>
+            <input id="midpoint-slider" class="slider" type="range" min="0" max="20" step="1" value="0" />
             <div class="row"><span class="hint">iterates</span><span id="midpoint-read" class="val">0</span></div>
+
+            <div class="sep"></div>
+            <div class="row hint">Blend parameter (linear ⟷ curved)</div>
+            <input id="alpha-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.5" />
+            <div class="row"><span class="hint">α (blend)</span><span id="alpha-read" class="val">0.50</span></div>
         </div>
         <div class="sep"></div>
         <div class="row"><span class="hint">accel |a|</span><span id="a-val" class="val">0.00</span></div>
         <div class="row"><span class="hint">rigidity s(a)</span><span id="s-val" class="val">1.00</span></div>
         <div class="row"><span class="hint">drag index</span><span id="d-val" class="val">-</span></div>
         <div class="row hint">Click the gray ring to freeze & forget (no dynamics) until a vertex is dragged.</div>
+    </div><!-- #pane-inner -->
     </div>
     <div id="error-banner"></div>
 </div>
@@ -117,6 +129,7 @@ let lastMouseTime = 0;
 let smoothedAMag = 0;   // scalar |a|
 
 let midpointIterates = 0;
+let alphaBlend = 0.5;       // blend parameter for averaging polygon
 
 let isFrozen = false;       // true => physics disabled
 let hardFrozen = false;     // true => remain frozen until a vertex drag begins
@@ -148,6 +161,8 @@ const memorySlider = document.getElementById('memory-slider');
 const memoryRead = document.getElementById('memory-read');
 const midpointSlider = document.getElementById('midpoint-slider');
 const midpointRead = document.getElementById('midpoint-read');
+const alphaSlider = document.getElementById('alpha-slider');
+const alphaRead = document.getElementById('alpha-read');
 const disclosure = document.getElementById('disclosure');
 const controls = document.getElementById('controls');
 
@@ -219,6 +234,7 @@ lambdaSlider.addEventListener('input', () => { phys.lambda = parseFloat(lambdaSl
 dampSlider.addEventListener('input', () => applyDamping(parseFloat(dampSlider.value)));
 memorySlider.addEventListener('input', () => applyMemory(parseFloat(memorySlider.value)));
 midpointSlider.addEventListener('input', () => { midpointIterates = parseInt(midpointSlider.value); midpointRead.textContent = String(midpointIterates); });
+alphaSlider.addEventListener('input', () => { alphaBlend = parseFloat(alphaSlider.value); alphaRead.textContent = alphaBlend.toFixed(2); });
 
 disclosure.addEventListener('click', () => {
     controls.style.display = controls.style.display === 'none' ? 'block' : 'none';
@@ -414,13 +430,14 @@ function resetPhysicsMemory(){
     smoothedAMag = 0; prevMouseVel = new Complex(0,0); mouseVel = new Complex(0,0);
 }
 
-/* -------------------------- Midpoint polygon -------------------------- */
-function computeMidpointPolygon(verts) {
+/* -------------------------- Averaging polygon -------------------------- */
+function computeAveragingPolygon(verts, alpha) {
     const n = verts.length;
     const result = new Array(n);
     for (let i = 0; i < n; i++) {
         const j = (i + 1) % n;
-        result[i] = new Complex((verts[i].re + verts[j].re) / 2, (verts[i].im + verts[j].im) / 2);
+        const vi = verts[i], vj = verts[j];
+        result[i] = new Complex((1 - alpha) * vi.re + alpha * vj.re, (1 - alpha) * vi.im + alpha * vj.im);
     }
     return result;
 }
@@ -607,18 +624,18 @@ function draw() {
         ctx.closePath(); ctx.fillStyle = '#bbb'; ctx.fill();
     }
 
-    // midpoint polygon iterates (blue)
+    // averaging polygon iterates (blue)
     if (midpointIterates > 0) {
-        let midVerts = vertices.map(v => new Complex(v.re, v.im));
+        let avgVerts = vertices.map(v => new Complex(v.re, v.im));
         ctx.setLineDash([]);
         ctx.strokeStyle = 'blue';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         for (let iter = 0; iter < midpointIterates; iter++) {
-            midVerts = computeMidpointPolygon(midVerts);
+            avgVerts = computeAveragingPolygon(avgVerts, alphaBlend);
             ctx.beginPath();
             for (let i = 0; i < dim; i++) {
-                const px = cx + midVerts[i].re * view_r;
-                const py = cy - midVerts[i].im * view_r;
+                const px = cx + avgVerts[i].re * view_r;
+                const py = cy - avgVerts[i].im * view_r;
                 if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
             }
             ctx.closePath();
@@ -797,6 +814,59 @@ main_canvas.addEventListener('mouseup', endDrag);
 main_canvas.addEventListener('mouseleave', endDrag);
 
 window.addEventListener('resize', () => { updateCanvasSizes(); });
+
+/* -------------------------- Sticky border toggle (120 ↔ 200 px) -------------------------- */
+const PANE_NARROW = 120, PANE_WIDE = 200, PANE_THRESHOLD = 160;
+let isPaneWide = false;
+let borderMouseDownX = null;
+let borderHasDragged = false;
+
+const infoPaneElement = document.getElementById('info-pane');
+
+function setPaneSize(wide) {
+    isPaneWide = wide;
+    infoPaneElement.classList.toggle('pane-wide', wide);
+}
+
+function onBorderRegion(e) {
+    const paneRect = infoPaneElement.getBoundingClientRect();
+    return e.clientX >= paneRect.left && e.clientX < paneRect.left + 6;
+}
+
+infoPaneElement.addEventListener('mousemove', (e) => {
+    const paneRect = infoPaneElement.getBoundingClientRect();
+    const nearBorder = e.clientX < paneRect.left + 6;
+    infoPaneElement.style.cursor = nearBorder ? 'ew-resize' : '';
+});
+infoPaneElement.addEventListener('mouseleave', () => { if (!borderMouseDownX) infoPaneElement.style.cursor = ''; });
+
+infoPaneElement.addEventListener('mousedown', (e) => {
+    if (!onBorderRegion(e)) return;
+    borderMouseDownX = e.clientX;
+    borderHasDragged = false;
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (borderMouseDownX === null) return;
+    if (Math.abs(e.clientX - borderMouseDownX) > 4) {
+        borderHasDragged = true;
+        // snap based on panel width implied by mouse position
+        const impliedWidth = window.innerWidth - e.clientX;
+        setPaneSize(impliedWidth > PANE_THRESHOLD);
+    }
+});
+
+document.addEventListener('mouseup', (e) => {
+    if (borderMouseDownX === null) return;
+    if (!borderHasDragged) {
+        // plain click → toggle
+        setPaneSize(!isPaneWide);
+    }
+    borderMouseDownX = null;
+    borderHasDragged = false;
+    infoPaneElement.style.cursor = '';
+});
 
 /* -------------------------- Boot -------------------------- */
 updateCanvasSizes();
