@@ -5,20 +5,48 @@
     <title>Polygon – Rubber Physics (Sliders v11)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-        :root{ --pane-w:120px; }
+        :root{ --pane-w:120px; --pane-current-w:120px; }
         body { margin: 0; overflow: hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif; background: #f5f6f8; color: #222; }
         #canvas-pane { width: 100vw; height: 100vh; position: relative; }
         #main-canvas { width: 100%; height: 100%; display: block; }
         #info-pane {
-            position: absolute; top: 0; right: 0; width: var(--pane-w);
+            position: absolute; top: 0; right: 0; width: var(--pane-current-w);
             background: rgba(250,250,250,0.8);
-            padding: 8px; box-sizing: border-box; border-left: 2px solid #999; font-size: 11px;
+            padding: 8px; box-sizing: border-box; font-size: 11px;
             backdrop-filter: blur(2px); max-height: 95vh; overflow-y: auto;
+            transition: width 0.15s ease;
         }
+        #info-pane.dragging { transition: none; }
+        #info-pane.pane-wide #pane-inner { zoom: 1.75; }
+        /* Draggable curtain handle — two thin lines with sparse dots between */
+        #pane-handle {
+            position: absolute; top: 0; bottom: 0;
+            right: var(--pane-current-w);
+            width: 10px; cursor: ew-resize; z-index: 200;
+            background-image:
+                /* two outer thin gray lines */
+                linear-gradient(to right,
+                    #999 0px, #999 1px,
+                    white 1px, white 9px,
+                    #999 9px, #999 10px),
+                /* sparse gray dots in the white gap */
+                repeating-linear-gradient(to bottom,
+                    transparent 0px, transparent 5px,
+                    #bbb 5px, #bbb 7px,
+                    transparent 7px, transparent 14px);
+            background-size: 10px 100%, 3px 14px;
+            background-position: 0 0, 4px 0;
+            background-repeat: no-repeat, repeat-y;
+            transition: right 0.15s ease;
+        }
+        #pane-handle.dragging { transition: none; }
         #info-pane input[type="text"] { width: 100%; box-sizing: border-box; }
         .num3 { width: 3ch; padding: 2px; }
-        #info-pane .row { margin-bottom: 6px; display: grid; grid-template-columns: 1fr; gap: 4px; align-items: center; }
+        #info-pane .row { margin-bottom: 4px; display: grid; grid-template-columns: 1fr; gap: 2px; align-items: center; }
         #info-pane .val { font-variant-numeric: tabular-nums; }
+        .slider-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; align-items: center; margin-bottom: 4px; }
+        .slider-row .slider { width: 100%; margin: 0; accent-color:#888; }
+        .slider-row .val { font-size: 10px; font-variant-numeric: tabular-nums; }
         .slider { width: 100%; accent-color:#888; }
         .hint { color:#666; font-size:10px; }
         .sep { height:1px; background:#e5e5e5; margin:6px 0; }
@@ -26,16 +54,12 @@
         .disclosure { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
         .chev { transition: transform .15s ease; font-size:12px; }
         .collapsed .chev { transform: rotate(-90deg); }
-        #info-pane { cursor: default; transition: width 0.12s ease; }
-        #info-pane.pane-wide { width: 200px; }
-        #info-pane.pane-wide #pane-inner { zoom: 1.75; }
-        /* ew-resize cursor when hovering within 6px of left border */
-        #info-pane:hover { cursor: default; }
     </style>
 </head>
 <body>
 <div id="canvas-pane">
     <canvas id="main-canvas"></canvas>
+    <div id="pane-handle"></div>
     <div id="info-pane">
     <div id="pane-inner">
         <div class="row">
@@ -50,33 +74,45 @@
         <div id="disclosure" class="row disclosure"><span class="chev">▾</span><strong>controls</strong></div>
         <div id="controls">
             <div class="row hint">Material stiffness (soft ⟷ rigid)</div>
-            <input id="stiff-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.55" />
-            <div class="row"><span class="hint">spring×</span><span id="stiff-read" class="val">—</span></div>
+            <div class="slider-row">
+                <input id="stiff-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.55" />
+                <span id="stiff-read" class="val">—</span>
+            </div>
 
             <div class="sep"></div>
             <div class="row hint">Spread of motion (local ⟷ global)</div>
-            <input id="lambda-slider" class="slider" type="range" min="0.05" max="4.50" step="0.01" />
-            <div class="row"><span class="hint">λ (decay)</span><span id="lambda-read" class="val">—</span></div>
+            <div class="slider-row">
+                <input id="lambda-slider" class="slider" type="range" min="0.05" max="4.50" step="0.01" />
+                <span id="lambda-read" class="val">—</span>
+            </div>
 
             <div class="sep"></div>
             <div class="row hint">Damping (bouncy ⟷ syrupy)</div>
-            <input id="damp-slider" class="slider" type="range" min="0" max="1" step="0.01" />
-            <div class="row"><span class="hint">damping</span><span id="damp-read" class="val">—</span></div>
+            <div class="slider-row">
+                <input id="damp-slider" class="slider" type="range" min="0" max="1" step="0.01" />
+                <span id="damp-read" class="val">—</span>
+            </div>
 
             <div class="sep"></div>
             <div class="row hint">Memory (springy ⟷ clay)</div>
-            <input id="memory-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.15" />
-            <div class="row"><span class="hint">plastic rate ρ</span><span id="memory-read" class="val">—</span></div>
+            <div class="slider-row">
+                <input id="memory-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.15" />
+                <span id="memory-read" class="val">—</span>
+            </div>
 
             <div class="sep"></div>
             <div class="row hint">Averaging polygon iterates</div>
-            <input id="midpoint-slider" class="slider" type="range" min="0" max="20" step="1" value="0" />
-            <div class="row"><span class="hint">iterates</span><span id="midpoint-read" class="val">0</span></div>
+            <div class="slider-row">
+                <input id="midpoint-slider" class="slider" type="range" min="0" max="20" step="1" value="0" />
+                <span id="midpoint-read" class="val">0</span>
+            </div>
 
             <div class="sep"></div>
-            <div class="row hint">Blend parameter (linear ⟷ curved)</div>
-            <input id="alpha-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.5" />
-            <div class="row"><span class="hint">α (blend)</span><span id="alpha-read" class="val">0.50</span></div>
+            <div class="row hint">Blend α (linear ⟷ curved)</div>
+            <div class="slider-row">
+                <input id="alpha-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.5" />
+                <span id="alpha-read" class="val">0.50</span>
+            </div>
         </div>
         <div class="sep"></div>
         <div class="row"><span class="hint">accel |a|</span><span id="a-val" class="val">0.00</span></div>
@@ -548,7 +584,7 @@ function draw() {
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 1;
             ctx.stroke();
-            if (i === 0) { ctx.strokeStyle = 'blue'; ctx.lineWidth = 1.5; ctx.stroke(); }
+            if (i === 0) { ctx.strokeStyle = 'blue'; ctx.lineWidth = 0.75; ctx.stroke(); }
         }
         // arrowheads on non-dashed edges (drawn last)
         for (let i = 0; i < dim - 1; i++) {
@@ -606,7 +642,7 @@ function draw() {
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 1;
         ctx.stroke();
-        if (i === 0) { ctx.strokeStyle = 'blue'; ctx.lineWidth = 2; ctx.stroke(); }
+        if (i === 0) { ctx.strokeStyle = 'blue'; ctx.lineWidth = 1; ctx.stroke(); }
     }
 
     // arrowheads LAST (on top of vertices)
@@ -629,7 +665,7 @@ function draw() {
         let avgVerts = vertices.map(v => new Complex(v.re, v.im));
         ctx.setLineDash([]);
         ctx.strokeStyle = 'blue';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 0.75;
         for (let iter = 0; iter < midpointIterates; iter++) {
             avgVerts = computeAveragingPolygon(avgVerts, alphaBlend);
             ctx.beginPath();
@@ -816,59 +852,60 @@ main_canvas.addEventListener('mouseleave', endDrag);
 window.addEventListener('resize', () => { updateCanvasSizes(); });
 
 /* -------------------------- Sticky border toggle (120 ↔ 200 px) -------------------------- */
-const PANE_NARROW = 120, PANE_WIDE = 200, PANE_THRESHOLD = 160;
+const PANE_NARROW = 120, PANE_WIDE_W = 200, PANE_THRESHOLD = 160;
 let isPaneWide = false;
-let borderMouseDownX = null;
-let borderHasDragged = false;
+let borderDragging = false;
+let borderStartX = null;
 
-const infoPaneElement = document.getElementById('info-pane');
+const infoPaneEl = document.getElementById('info-pane');
+const paneHandleEl = document.getElementById('pane-handle');
+
+function setCSSPaneWidth(w) {
+    document.documentElement.style.setProperty('--pane-current-w', w + 'px');
+}
 
 function setPaneSize(wide) {
     isPaneWide = wide;
-    infoPaneElement.classList.toggle('pane-wide', wide);
+    infoPaneEl.classList.toggle('pane-wide', wide);
+    setCSSPaneWidth(wide ? PANE_WIDE_W : PANE_NARROW);
 }
 
-function onBorderRegion(e) {
-    const paneRect = infoPaneElement.getBoundingClientRect();
-    return e.clientX >= paneRect.left && e.clientX < paneRect.left + 6;
-}
-
-infoPaneElement.addEventListener('mousemove', (e) => {
-    const paneRect = infoPaneElement.getBoundingClientRect();
-    const nearBorder = e.clientX < paneRect.left + 6;
-    infoPaneElement.style.cursor = nearBorder ? 'ew-resize' : '';
-});
-infoPaneElement.addEventListener('mouseleave', () => { if (!borderMouseDownX) infoPaneElement.style.cursor = ''; });
-
-infoPaneElement.addEventListener('mousedown', (e) => {
-    if (!onBorderRegion(e)) return;
-    borderMouseDownX = e.clientX;
-    borderHasDragged = false;
+paneHandleEl.addEventListener('mousedown', (e) => {
+    borderDragging = true;
+    borderStartX = e.clientX;
+    infoPaneEl.classList.add('dragging');
+    paneHandleEl.classList.add('dragging');
     e.preventDefault();
 });
 
 document.addEventListener('mousemove', (e) => {
-    if (borderMouseDownX === null) return;
-    if (Math.abs(e.clientX - borderMouseDownX) > 4) {
-        borderHasDragged = true;
-        // snap based on panel width implied by mouse position
-        const impliedWidth = window.innerWidth - e.clientX;
-        setPaneSize(impliedWidth > PANE_THRESHOLD);
-    }
+    if (!borderDragging) return;
+    const liveWidth = Math.max(80, Math.min(400, window.innerWidth - e.clientX));
+    infoPaneEl.style.width = liveWidth + 'px';
+    setCSSPaneWidth(liveWidth);
 });
 
 document.addEventListener('mouseup', (e) => {
-    if (borderMouseDownX === null) return;
-    if (!borderHasDragged) {
-        // plain click → toggle
+    if (!borderDragging) return;
+    borderDragging = false;
+    infoPaneEl.classList.remove('dragging');
+    paneHandleEl.classList.remove('dragging');
+    // remove inline width so CSS transition can animate the snap
+    infoPaneEl.style.width = '';
+    const dragDist = Math.abs(e.clientX - borderStartX);
+    if (dragDist < 4) {
+        // click: toggle
         setPaneSize(!isPaneWide);
+    } else {
+        // snap to nearest
+        const liveWidth = window.innerWidth - e.clientX;
+        setPaneSize(liveWidth > PANE_THRESHOLD);
     }
-    borderMouseDownX = null;
-    borderHasDragged = false;
-    infoPaneElement.style.cursor = '';
+    borderStartX = null;
 });
 
 /* -------------------------- Boot -------------------------- */
+setCSSPaneWidth(PANE_NARROW);
 updateCanvasSizes();
 initVertices();
 applyStiff(parseFloat(stiffSlider.value));
