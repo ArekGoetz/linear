@@ -26,13 +26,18 @@
         .disclosure { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
         .chev { transition: transform .15s ease; font-size:12px; }
         .collapsed .chev { transform: rotate(-90deg); }
-        #info-pane.dragging-border { cursor: ew-resize; user-select: none; }
+        #info-pane { cursor: default; transition: width 0.12s ease; }
+        #info-pane.pane-wide { width: 200px; }
+        #info-pane.pane-wide #pane-inner { zoom: 1.75; }
+        /* ew-resize cursor when hovering within 6px of left border */
+        #info-pane:hover { cursor: default; }
     </style>
 </head>
 <body>
 <div id="canvas-pane">
     <canvas id="main-canvas"></canvas>
     <div id="info-pane">
+    <div id="pane-inner">
         <div class="row">
             <label for="dim-input">vertices</label>
             <input type="text" id="dim-input" class="num3" maxlength="3" value="5" />
@@ -78,6 +83,7 @@
         <div class="row"><span class="hint">rigidity s(a)</span><span id="s-val" class="val">1.00</span></div>
         <div class="row"><span class="hint">drag index</span><span id="d-val" class="val">-</span></div>
         <div class="row hint">Click the gray ring to freeze & forget (no dynamics) until a vertex is dragged.</div>
+    </div><!-- #pane-inner -->
     </div>
     <div id="error-banner"></div>
 </div>
@@ -809,52 +815,57 @@ main_canvas.addEventListener('mouseleave', endDrag);
 
 window.addEventListener('resize', () => { updateCanvasSizes(); });
 
-/* -------------------------- Draggable border toggle -------------------------- */
-let borderDragActive = false;
-let borderOriginalWidth = null;
+/* -------------------------- Sticky border toggle (120 ↔ 200 px) -------------------------- */
+const PANE_NARROW = 120, PANE_WIDE = 200, PANE_THRESHOLD = 160;
+let isPaneWide = false;
+let borderMouseDownX = null;
+let borderHasDragged = false;
 
 const infoPaneElement = document.getElementById('info-pane');
 
-infoPaneElement.addEventListener('mousedown', (e) => {
+function setPaneSize(wide) {
+    isPaneWide = wide;
+    infoPaneElement.classList.toggle('pane-wide', wide);
+}
+
+function onBorderRegion(e) {
     const paneRect = infoPaneElement.getBoundingClientRect();
-    const distFromLeft = e.clientX - paneRect.left;
-    // Only activate if clicking on the left border (within 4px)
-    if (distFromLeft < 4 && distFromLeft >= 0) {
-        borderDragActive = true;
-        borderOriginalWidth = infoPaneElement.offsetWidth;
-        document.documentElement.classList.add('dragging-border');
-        infoPaneElement.classList.add('dragging-border');
-        e.preventDefault();
-    }
+    return e.clientX >= paneRect.left && e.clientX < paneRect.left + 6;
+}
+
+infoPaneElement.addEventListener('mousemove', (e) => {
+    const paneRect = infoPaneElement.getBoundingClientRect();
+    const nearBorder = e.clientX < paneRect.left + 6;
+    infoPaneElement.style.cursor = nearBorder ? 'ew-resize' : '';
+});
+infoPaneElement.addEventListener('mouseleave', () => { if (!borderMouseDownX) infoPaneElement.style.cursor = ''; });
+
+infoPaneElement.addEventListener('mousedown', (e) => {
+    if (!onBorderRegion(e)) return;
+    borderMouseDownX = e.clientX;
+    borderHasDragged = false;
+    e.preventDefault();
 });
 
 document.addEventListener('mousemove', (e) => {
-    if (borderDragActive && borderOriginalWidth !== null) {
-        const newWidth = Math.max(80, Math.min(400, window.innerWidth - e.clientX + 10));
-        infoPaneElement.style.width = newWidth + 'px';
+    if (borderMouseDownX === null) return;
+    if (Math.abs(e.clientX - borderMouseDownX) > 4) {
+        borderHasDragged = true;
+        // snap based on panel width implied by mouse position
+        const impliedWidth = window.innerWidth - e.clientX;
+        setPaneSize(impliedWidth > PANE_THRESHOLD);
     }
 });
 
-document.addEventListener('mouseup', () => {
-    if (borderDragActive) {
-        borderDragActive = false;
-        document.documentElement.classList.remove('dragging-border');
-        infoPaneElement.classList.remove('dragging-border');
+document.addEventListener('mouseup', (e) => {
+    if (borderMouseDownX === null) return;
+    if (!borderHasDragged) {
+        // plain click → toggle
+        setPaneSize(!isPaneWide);
     }
-});
-
-infoPaneElement.addEventListener('dblclick', (e) => {
-    const paneRect = infoPaneElement.getBoundingClientRect();
-    const distFromLeft = e.clientX - paneRect.left;
-    // Double-click on border toggles width
-    if (distFromLeft < 4 && distFromLeft >= 0) {
-        const currentWidth = parseFloat(infoPaneElement.style.width) || parseInt(getComputedStyle(document.documentElement).getPropertyValue('--pane-w'));
-        const defaultWidth = 120;
-        const expandedWidth = 200;
-        const newWidth = Math.abs(currentWidth - defaultWidth) < 10 ? expandedWidth : defaultWidth;
-        infoPaneElement.style.width = newWidth + 'px';
-        e.preventDefault();
-    }
+    borderMouseDownX = null;
+    borderHasDragged = false;
+    infoPaneElement.style.cursor = '';
 });
 
 /* -------------------------- Boot -------------------------- */
