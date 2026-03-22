@@ -12,8 +12,8 @@
         #info-pane {
             position: absolute; top: 0; right: 0; width: var(--pane-w);
             background: rgba(250,250,250,0.8);
-            padding: 8px; box-sizing: border-box; border-left: 1px solid #ddd; font-size: 11px;
-            backdrop-filter: blur(2px);
+            padding: 8px; box-sizing: border-box; border-left: 2px solid #999; font-size: 11px;
+            backdrop-filter: blur(2px); max-height: 95vh; overflow-y: auto;
         }
         #info-pane input[type="text"] { width: 100%; box-sizing: border-box; }
         .num3 { width: 3ch; padding: 2px; }
@@ -26,6 +26,7 @@
         .disclosure { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
         .chev { transition: transform .15s ease; font-size:12px; }
         .collapsed .chev { transform: rotate(-90deg); }
+        #info-pane.dragging-border { cursor: ew-resize; user-select: none; }
     </style>
 </head>
 <body>
@@ -63,9 +64,14 @@
             <div class="row"><span class="hint">plastic rate ρ</span><span id="memory-read" class="val">—</span></div>
 
             <div class="sep"></div>
-            <div class="row hint">Midpoint polygon iterates</div>
-            <input id="midpoint-slider" class="slider" type="range" min="0" max="30" step="1" value="0" />
+            <div class="row hint">Averaging polygon iterates</div>
+            <input id="midpoint-slider" class="slider" type="range" min="0" max="20" step="1" value="0" />
             <div class="row"><span class="hint">iterates</span><span id="midpoint-read" class="val">0</span></div>
+
+            <div class="sep"></div>
+            <div class="row hint">Blend parameter (linear ⟷ curved)</div>
+            <input id="alpha-slider" class="slider" type="range" min="0" max="1" step="0.01" value="0.5" />
+            <div class="row"><span class="hint">α (blend)</span><span id="alpha-read" class="val">0.50</span></div>
         </div>
         <div class="sep"></div>
         <div class="row"><span class="hint">accel |a|</span><span id="a-val" class="val">0.00</span></div>
@@ -117,6 +123,7 @@ let lastMouseTime = 0;
 let smoothedAMag = 0;   // scalar |a|
 
 let midpointIterates = 0;
+let alphaBlend = 0.5;       // blend parameter for averaging polygon
 
 let isFrozen = false;       // true => physics disabled
 let hardFrozen = false;     // true => remain frozen until a vertex drag begins
@@ -148,6 +155,8 @@ const memorySlider = document.getElementById('memory-slider');
 const memoryRead = document.getElementById('memory-read');
 const midpointSlider = document.getElementById('midpoint-slider');
 const midpointRead = document.getElementById('midpoint-read');
+const alphaSlider = document.getElementById('alpha-slider');
+const alphaRead = document.getElementById('alpha-read');
 const disclosure = document.getElementById('disclosure');
 const controls = document.getElementById('controls');
 
@@ -219,6 +228,7 @@ lambdaSlider.addEventListener('input', () => { phys.lambda = parseFloat(lambdaSl
 dampSlider.addEventListener('input', () => applyDamping(parseFloat(dampSlider.value)));
 memorySlider.addEventListener('input', () => applyMemory(parseFloat(memorySlider.value)));
 midpointSlider.addEventListener('input', () => { midpointIterates = parseInt(midpointSlider.value); midpointRead.textContent = String(midpointIterates); });
+alphaSlider.addEventListener('input', () => { alphaBlend = parseFloat(alphaSlider.value); alphaRead.textContent = alphaBlend.toFixed(2); });
 
 disclosure.addEventListener('click', () => {
     controls.style.display = controls.style.display === 'none' ? 'block' : 'none';
@@ -414,13 +424,14 @@ function resetPhysicsMemory(){
     smoothedAMag = 0; prevMouseVel = new Complex(0,0); mouseVel = new Complex(0,0);
 }
 
-/* -------------------------- Midpoint polygon -------------------------- */
-function computeMidpointPolygon(verts) {
+/* -------------------------- Averaging polygon -------------------------- */
+function computeAveragingPolygon(verts, alpha) {
     const n = verts.length;
     const result = new Array(n);
     for (let i = 0; i < n; i++) {
         const j = (i + 1) % n;
-        result[i] = new Complex((verts[i].re + verts[j].re) / 2, (verts[i].im + verts[j].im) / 2);
+        const vi = verts[i], vj = verts[j];
+        result[i] = new Complex((1 - alpha) * vi.re + alpha * vj.re, (1 - alpha) * vi.im + alpha * vj.im);
     }
     return result;
 }
@@ -607,18 +618,18 @@ function draw() {
         ctx.closePath(); ctx.fillStyle = '#bbb'; ctx.fill();
     }
 
-    // midpoint polygon iterates (blue)
+    // averaging polygon iterates (blue)
     if (midpointIterates > 0) {
-        let midVerts = vertices.map(v => new Complex(v.re, v.im));
+        let avgVerts = vertices.map(v => new Complex(v.re, v.im));
         ctx.setLineDash([]);
         ctx.strokeStyle = 'blue';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         for (let iter = 0; iter < midpointIterates; iter++) {
-            midVerts = computeMidpointPolygon(midVerts);
+            avgVerts = computeAveragingPolygon(avgVerts, alphaBlend);
             ctx.beginPath();
             for (let i = 0; i < dim; i++) {
-                const px = cx + midVerts[i].re * view_r;
-                const py = cy - midVerts[i].im * view_r;
+                const px = cx + avgVerts[i].re * view_r;
+                const py = cy - avgVerts[i].im * view_r;
                 if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
             }
             ctx.closePath();
@@ -797,6 +808,54 @@ main_canvas.addEventListener('mouseup', endDrag);
 main_canvas.addEventListener('mouseleave', endDrag);
 
 window.addEventListener('resize', () => { updateCanvasSizes(); });
+
+/* -------------------------- Draggable border toggle -------------------------- */
+let borderDragActive = false;
+let borderOriginalWidth = null;
+
+const infoPaneElement = document.getElementById('info-pane');
+
+infoPaneElement.addEventListener('mousedown', (e) => {
+    const paneRect = infoPaneElement.getBoundingClientRect();
+    const distFromLeft = e.clientX - paneRect.left;
+    // Only activate if clicking on the left border (within 4px)
+    if (distFromLeft < 4 && distFromLeft >= 0) {
+        borderDragActive = true;
+        borderOriginalWidth = infoPaneElement.offsetWidth;
+        document.documentElement.classList.add('dragging-border');
+        infoPaneElement.classList.add('dragging-border');
+        e.preventDefault();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (borderDragActive && borderOriginalWidth !== null) {
+        const newWidth = Math.max(80, Math.min(400, window.innerWidth - e.clientX + 10));
+        infoPaneElement.style.width = newWidth + 'px';
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (borderDragActive) {
+        borderDragActive = false;
+        document.documentElement.classList.remove('dragging-border');
+        infoPaneElement.classList.remove('dragging-border');
+    }
+});
+
+infoPaneElement.addEventListener('dblclick', (e) => {
+    const paneRect = infoPaneElement.getBoundingClientRect();
+    const distFromLeft = e.clientX - paneRect.left;
+    // Double-click on border toggles width
+    if (distFromLeft < 4 && distFromLeft >= 0) {
+        const currentWidth = parseFloat(infoPaneElement.style.width) || parseInt(getComputedStyle(document.documentElement).getPropertyValue('--pane-w'));
+        const defaultWidth = 120;
+        const expandedWidth = 200;
+        const newWidth = Math.abs(currentWidth - defaultWidth) < 10 ? expandedWidth : defaultWidth;
+        infoPaneElement.style.width = newWidth + 'px';
+        e.preventDefault();
+    }
+});
 
 /* -------------------------- Boot -------------------------- */
 updateCanvasSizes();
