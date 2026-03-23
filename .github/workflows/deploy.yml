@@ -29,9 +29,16 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      - name: Assemble site
+        run: |
+          mkdir -p _site/fourier
+          cp index.html _site/
+          cp FourierClock.html _site/ 2>/dev/null || true
+          cp -r fourier/dist/. _site/fourier/
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: fourier/dist
+          path: _site
 
   deploy:
     needs: build
