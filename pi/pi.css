@@ -138,22 +138,28 @@ html, body {
   margin-top: 0.4em;
 }
 
-/* ── Sturmian Picker Box ────────────────────────────────── */
+/* ── Sturmian Picker Box — pure CSS grid ─────────────────── */
 .picker-box {
+  --grid-n: 20;
   width: 100%;
   aspect-ratio: 1;
-  background: #3a3a42;
   border: none;
   border-radius: 4px;
-  overflow: hidden;
   flex-shrink: 0;
   position: relative;
-}
-
-.picker-box canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.12) 0 1px,
+      transparent 1px calc(100% / var(--grid-n))
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.12) 0 1px,
+      transparent 1px calc(100% / var(--grid-n))
+    ),
+    #3a3a42;
+  background-size: 100% 100%;
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
@@ -174,7 +180,7 @@ html, body {
   box-shadow: 0 0 0 2px var(--slider-fill), 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
-/* Slider label auto-generated above rail */
+/* Slider label */
 .pi-slider__label {
   font-size: 0.75em;
   text-transform: uppercase;
@@ -226,14 +232,21 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
+  pointer-events: auto;
   font-size: 0.65em;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--bg);
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, transform 0.15s ease-out;
+  transform-origin: center;
+}
+
+/* Enlarge thumb on hover or when slider has keyboard focus */
+.pi-slider__thumb:hover,
+.pi-slider:focus-visible .pi-slider__thumb {
+  transform: translate(-50%, -50%) scale(1.5);
 }
 
 /* Thumb color driven by CSS attribute selectors — JS only sets data-parity */

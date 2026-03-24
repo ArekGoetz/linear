@@ -2,59 +2,67 @@
   /* ── Canvas sizing ─────────────────────────────────── */
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
+  let currentCycleForClock = 10;
 
   function sizeCanvas() {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
+    drawUnityClock();
   }
   new ResizeObserver(sizeCanvas).observe(canvas);
 
-  /* ── Picker canvas + grid ───────────────────────────── */
-  const pickerCanvas = document.getElementById("picker_canvas");
-  let pickerCtx = null;
-  let currentGridSize = 20; // 2 * cycle default (10)
-
-  if (pickerCanvas) {
-    pickerCtx = pickerCanvas.getContext("2d");
-
-    function sizePickerCanvas() {
-      pickerCanvas.width = pickerCanvas.clientWidth;
-      pickerCanvas.height = pickerCanvas.clientHeight;
-      drawPickerGrid();
-    }
-    new ResizeObserver(sizePickerCanvas).observe(pickerCanvas);
-  }
-
-  function drawPickerGrid() {
-    if (!pickerCtx) return;
-    const w = pickerCanvas.width;
-    const h = pickerCanvas.height;
+  /* ── Roots of unity clock ──────────────────────────── */
+  function drawUnityClock() {
+    const w = canvas.width;
+    const h = canvas.height;
     if (w === 0 || h === 0) return;
 
-    pickerCtx.clearRect(0, 0, w, h);
-    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-    pickerCtx.lineWidth = 1;
+    ctx.clearRect(0, 0, w, h);
 
-    const cellW = w / currentGridSize;
-    const cellH = h / currentGridSize;
+    const n = currentCycleForClock;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = Math.min(w, h) * 0.32;
+    const labelFont = Math.max(10, Math.min(16, radius / n * 2.5));
 
-    pickerCtx.beginPath();
-    for (let i = 0; i <= currentGridSize; i++) {
-      const x = Math.round(i * cellW) + 0.5;
-      pickerCtx.moveTo(x, 0);
-      pickerCtx.lineTo(x, h);
+    // Draw circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw labels at roots of unity positions
+    ctx.font = `600 ${labelFont}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const labelPad = labelFont * 0.35;
+    const labelRadius = radius + labelFont * 0.9;
+
+    for (let k = 0; k < n; k++) {
+      // Standard roots of unity: angle = 2πk/n, starting at right (3 o'clock)
+      // But place 0 at top (12 o'clock) for clock convention: offset by -π/2
+      const angle = (2 * Math.PI * k) / n - Math.PI / 2;
+      const lx = cx + labelRadius * Math.cos(angle);
+      const ly = cy + labelRadius * Math.sin(angle);
+
+      const text = String(k);
+      const metrics = ctx.measureText(text);
+      const tw = metrics.width + labelPad * 2;
+      const th = labelFont + labelPad * 1.4;
+      const cornerR = th * 0.3;
+
+      // Rounded rectangle background
+      ctx.beginPath();
+      ctx.roundRect(lx - tw / 2, ly - th / 2, tw, th, cornerR);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.fill();
+
+      // Label text
+      ctx.fillStyle = "#111113";
+      ctx.fillText(text, lx, ly);
     }
-    for (let i = 0; i <= currentGridSize; i++) {
-      const y = Math.round(i * cellH) + 0.5;
-      pickerCtx.moveTo(0, y);
-      pickerCtx.lineTo(w, y);
-    }
-    pickerCtx.stroke();
-  }
-
-  function setPickerGridSize(n) {
-    currentGridSize = n;
-    drawPickerGrid();
   }
 
   /* ── Panel resize ──────────────────────────────────── */
@@ -116,27 +124,19 @@
     pg.classList.remove("snapping");
   });
 
-  /* ── PiSlider ──────────────────────────────────────── */
+  /* ── PiSlider (v2 — no DOM generation, CSS grid) ──── */
   /*
-   * Reusable slider component.
-   *
-   * HTML usage:
-   *   <div class="pi-slider"
-   *        data-name="cycle"
-   *        data-min="2" data-max="32"
-   *        data-step="1"
-   *        data-scale="quadratic">
+   * HTML provides the full markup:
+   *   <div class="pi-slider" data-min="2" data-max="32"
+   *        data-step="1" data-scale="quadratic" data-value="10"
+   *        tabindex="0" role="slider">
+   *     <div class="pi-slider__label">cycle</div>
+   *     <div class="pi-slider__rail">
+   *       <div class="pi-slider__track"></div>
+   *       <div class="pi-slider__fill"></div>
+   *       <div class="pi-slider__thumb"></div>
+   *     </div>
    *   </div>
-   *
-   * data-scale: "lin" (default) | "exp" | "log" | "quadratic"
-   * data-name:  variable name (shown as label above the slider)
-   * data-min / data-max / data-step: range config
-   * data-value: optional initial value (defaults to min)
-   *
-   * API:
-   *   slider.displayValue  — current mapped display value
-   *   slider.setValue(v)    — set raw internal value, triggers update
-   *   slider.onChange       — callback(displayValue) on every change
    */
 
   const SCALES = {
@@ -162,14 +162,15 @@
       this.max = Number(el.dataset.max) || 1000;
       this.step = Number(el.dataset.step) || 1;
       this.scaleFn = SCALES[el.dataset.scale] || SCALES.lin;
-      this.name = el.dataset.name || "";
       this.onChange = null;
 
       this._value = el.dataset.value !== undefined ? Number(el.dataset.value) : this.min;
       this._dragging = false;
       this._pointerId = null;
 
-      this._buildDOM();
+      this._rail = el.querySelector(".pi-slider__rail");
+      this._thumb = el.querySelector(".pi-slider__thumb");
+
       this._bind();
       this._update();
     }
@@ -196,43 +197,11 @@
       this._update();
     }
 
-    _buildDOM() {
-      this.el.tabIndex = 0;
-      this.el.setAttribute("role", "slider");
-      this.el.setAttribute("aria-valuemin", this.min);
-      this.el.setAttribute("aria-valuemax", this.max);
-
-      if (this.name) {
-        const label = document.createElement("div");
-        label.className = "pi-slider__label";
-        label.textContent = this.name;
-        this.el.appendChild(label);
-      }
-
-      const rail = document.createElement("div");
-      rail.className = "pi-slider__rail";
-
-      const track = document.createElement("div");
-      track.className = "pi-slider__track";
-
-      const fill = document.createElement("div");
-      fill.className = "pi-slider__fill";
-
-      const thumb = document.createElement("div");
-      thumb.className = "pi-slider__thumb";
-
-      rail.append(track, fill, thumb);
-      this.el.appendChild(rail);
-
-      this._rail = rail;
-      this._thumb = thumb;
-    }
-
     _bind() {
       this.el.addEventListener("pointerdown", (e) => this._onDown(e));
       this.el.addEventListener("pointermove", (e) => this._onMove(e));
-      this.el.addEventListener("pointerup", (e) => this._onUp(e));
-      this.el.addEventListener("pointercancel", (e) => this._onUp(e));
+      this.el.addEventListener("pointerup", () => this._onUp());
+      this.el.addEventListener("pointercancel", () => this._onUp());
       this.el.addEventListener("lostpointercapture", () => this._release());
       this.el.addEventListener("keydown", (e) => this._onKey(e));
     }
@@ -300,7 +269,6 @@
       this._thumb.textContent = display;
       this.el.setAttribute("aria-valuenow", display);
 
-      // Set parity attribute — CSS handles the background color
       if (!Number.isInteger(display)) {
         this.el.dataset.parity = "frac";
       } else if (display % 2 === 0) {
@@ -313,12 +281,19 @@
     }
   }
 
-  // Auto-init all .pi-slider elements, store by id for wiring
+  // Auto-init
   const sliders = {};
   document.querySelectorAll(".pi-slider").forEach((el) => {
     const s = new PiSlider(el);
     if (el.id) sliders[el.id] = s;
   });
+
+  // Picker grid — CSS-only via --grid-n custom property
+  const pickerBox = document.getElementById("picker_box");
+
+  function setPickerGridSize(n) {
+    if (pickerBox) pickerBox.style.setProperty("--grid-n", n);
+  }
 
   // Wire cycle → length + picker grid
   const cycle = sliders.sl_cycle;
@@ -326,7 +301,9 @@
 
   if (cycle) {
     const gridSize = 2 * cycle.displayValue;
+    currentCycleForClock = cycle.displayValue;
     setPickerGridSize(gridSize);
+    drawUnityClock();
 
     if (length) {
       length.setMax(gridSize);
@@ -335,7 +312,9 @@
 
     cycle.onChange = (cycleVal) => {
       const gs = 2 * cycleVal;
+      currentCycleForClock = cycleVal;
       setPickerGridSize(gs);
+      drawUnityClock();
       if (length) {
         length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));
@@ -343,7 +322,6 @@
     };
   }
 
-  // Expose for programmatic creation
   window.PiSlider = PiSlider;
 
 })();
