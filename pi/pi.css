@@ -8,10 +8,9 @@
 }
 
 :root {
-  --panel-width: 120px;
   --bg: #111113;
   --surface: rgba(24, 24, 28, 0.80);
-  --text: rgba(255, 255, 255, 0.88);
+  --text: rgb(239, 239, 239);
   --text-dim: rgba(255, 255, 255, 0.45);
   --handle-dot: rgba(255, 255, 255, 0.35);
   --slider-track: rgba(255, 255, 255, 0.08);
@@ -32,6 +31,7 @@ html, body {
 
 /* ── Playground ──────────────────────────────────────────── */
 #playground {
+  --panel-width: 120px;
   position: relative;
   width: 100%;
   height: 100%;
@@ -72,8 +72,13 @@ html, body {
   --panel-font: calc(var(--panel-width) / 15);
 }
 
-#input_panel.snapping {
+/* Snapping transitions driven from #playground.snapping ancestor */
+#playground.snapping #input_panel {
   transition: width var(--transition-snap);
+}
+
+#playground.snapping #resize_handle {
+  transition: right var(--transition-snap), border-color 0.15s, background 0.15s;
 }
 
 /* ── Resize Handle (sibling of panel, never clipped) ─────── */
@@ -82,39 +87,40 @@ html, body {
   top: 50%;
   right: var(--panel-width);
   z-index: 10;
-  width: 14px;
-  height: 36px;
+  width: 24px;
+  height: 40px;
   transform: translate(50%, -50%);
-  border: 1.5px dotted var(--handle-dot);
-  border-radius: 5px;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
   background: rgba(30, 30, 34, 0.9);
   cursor: ew-resize;
   touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   transition: border-color 0.15s, background 0.15s;
-}
-
-#resize_handle.snapping {
-  transition: right var(--transition-snap), border-color 0.15s, background 0.15s;
 }
 
 #resize_handle:hover,
 #resize_handle:active {
-  border-color: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.45);
   background: rgba(50, 50, 56, 0.95);
 }
 
-/* Grip dots inside handle */
-#resize_handle::before {
+/* Two dotted vertical grip lines */
+#resize_handle::before,
+#resize_handle::after {
   content: "";
   display: block;
-  width: 3px;
+  width: 0;
   height: 16px;
-  background-image: radial-gradient(circle, var(--handle-dot) 1px, transparent 1px);
-  background-size: 3px 4px;
-  background-repeat: repeat-y;
+  border-left: 2px dotted var(--handle-dot);
+}
+
+#resize_handle:hover::before,
+#resize_handle:hover::after {
+  border-left-color: rgba(255, 255, 255, 0.55);
 }
 
 /* ── Panel Content ───────────────────────────────────────── */
@@ -168,16 +174,15 @@ html, body {
   pointer-events: none;
 }
 
-/* Oval thumb with value inside */
+/* Oval thumb — dynamically sized around its content */
 .slider-thumb {
   position: absolute;
   top: 50%;
   left: var(--slider-pct, 0%);
   transform: translate(-50%, -50%);
-  min-width: 28px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
+  width: fit-content;
+  padding: 0.25em 0.6em;
+  border-radius: 999px;
   background: var(--slider-thumb-bg);
   display: flex;
   align-items: center;
@@ -194,13 +199,12 @@ html, body {
 /* ── Responsive / Touch ──────────────────────────────────── */
 @media (pointer: coarse) {
   #resize_handle {
-    width: 20px;
+    width: 28px;
     height: 48px;
   }
 
   .slider-thumb {
-    min-width: 34px;
-    height: 26px;
+    padding: 0.35em 0.7em;
     font-size: 0.75em;
   }
 
@@ -210,7 +214,7 @@ html, body {
 }
 
 @media (max-width: 600px) {
-  :root {
+  #playground {
     --panel-width: 120px;
   }
 }
