@@ -123,7 +123,7 @@
    * HTML usage:
    *   <div class="pi-slider"
    *        data-name="cycle"
-   *        data-min="2" data-max="48"
+   *        data-min="2" data-max="32"
    *        data-step="1"
    *        data-scale="quadratic">
    *   </div>
@@ -185,6 +185,14 @@
 
     setValue(v) {
       this._value = Math.max(this.min, Math.min(this.max, v));
+      this._update();
+    }
+
+    setMax(newMax) {
+      this.max = newMax;
+      this.el.dataset.max = newMax;
+      this.el.setAttribute("aria-valuemax", newMax);
+      if (this._value > newMax) this._value = newMax;
       this._update();
     }
 
@@ -317,16 +325,19 @@
   const length = sliders.sl_length;
 
   if (cycle) {
-    // Set initial grid
-    setPickerGridSize(2 * cycle.displayValue);
+    const gridSize = 2 * cycle.displayValue;
+    setPickerGridSize(gridSize);
 
     if (length) {
+      length.setMax(gridSize);
       length.setValue(Math.floor(cycle.displayValue / 2));
     }
 
     cycle.onChange = (cycleVal) => {
-      setPickerGridSize(2 * cycleVal);
+      const gs = 2 * cycleVal;
+      setPickerGridSize(gs);
       if (length) {
+        length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));
       }
     };
