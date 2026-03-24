@@ -9,17 +9,14 @@
 
 :root {
   --panel-width: 120px;
-  --snap-points: 1, 120, 180, 240, 360, 480;
   --bg: #111113;
   --surface: rgba(24, 24, 28, 0.80);
-  --border-subtle: rgba(255, 255, 255, 0.06);
   --text: rgba(255, 255, 255, 0.88);
   --text-dim: rgba(255, 255, 255, 0.45);
-  --accent: rgba(255, 255, 255, 0.12);
   --handle-dot: rgba(255, 255, 255, 0.35);
   --slider-track: rgba(255, 255, 255, 0.08);
   --slider-fill: rgba(255, 255, 255, 0.22);
-  --slider-thumb: #e0e0e0;
+  --slider-thumb-bg: rgba(220, 220, 225, 0.92);
   --transition-snap: 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -79,15 +76,15 @@ html, body {
   transition: width var(--transition-snap);
 }
 
-/* ── Resize Handle ───────────────────────────────────────── */
+/* ── Resize Handle (sibling of panel, never clipped) ─────── */
 #resize_handle {
   position: absolute;
-  left: 0;
   top: 50%;
-  z-index: 3;
+  right: var(--panel-width);
+  z-index: 10;
   width: 14px;
   height: 36px;
-  transform: translate(-50%, -50%);
+  transform: translate(50%, -50%);
   border: 1.5px dotted var(--handle-dot);
   border-radius: 5px;
   background: rgba(30, 30, 34, 0.9);
@@ -97,6 +94,10 @@ html, body {
   align-items: center;
   justify-content: center;
   transition: border-color 0.15s, background 0.15s;
+}
+
+#resize_handle.snapping {
+  transition: right var(--transition-snap), border-color 0.15s, background 0.15s;
 }
 
 #resize_handle:hover,
@@ -134,88 +135,60 @@ html, body {
   text-overflow: ellipsis;
 }
 
-/* ── Slider Container ────────────────────────────────────── */
+/* ── Custom Slider ───────────────────────────────────────── */
 .slider-wrap {
   position: relative;
   width: 100%;
-  height: 2.8em;
+  height: 2.4em;
   display: flex;
   align-items: center;
-}
-
-/* ── Range Slider ────────────────────────────────────────── */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-track);
-  outline: none;
-  cursor: pointer;
   touch-action: none;
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* Track fill via linear-gradient set by JS on --slider-pct */
-input[type="range"] {
-  background: linear-gradient(
-    to right,
-    var(--slider-fill) var(--slider-pct, 0%),
-    var(--slider-track) var(--slider-pct, 0%)
-  );
-}
-
-/* Thumb — tall pill so pointer doesn't cover the value */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--slider-thumb);
-  border: none;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  cursor: grab;
-  position: relative;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--slider-thumb);
-  border: none;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  cursor: grab;
-}
-
-input[type="range"]:active::-webkit-slider-thumb {
-  cursor: grabbing;
-}
-
-input[type="range"]:active::-moz-range-thumb {
-  cursor: grabbing;
-}
-
-/* ── Slider Value Bubble ─────────────────────────────────── */
-.slider-value {
+.slider-track {
   position: absolute;
-  top: -0.2em;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 1.5px;
+  background: var(--slider-track);
+  pointer-events: none;
+}
+
+.slider-fill {
+  position: absolute;
+  left: 0;
+  height: 3px;
+  border-radius: 1.5px;
+  background: var(--slider-fill);
+  width: var(--slider-pct, 0%);
+  pointer-events: none;
+}
+
+/* Oval thumb with value inside */
+.slider-thumb {
+  position: absolute;
+  top: 50%;
   left: var(--slider-pct, 0%);
-  transform: translateX(-50%);
-  font-size: 0.7em;
+  transform: translate(-50%, -50%);
+  min-width: 28px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--slider-thumb-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: 0.65em;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--bg);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s;
   white-space: nowrap;
-  font-weight: 600;
-  z-index: 1;
-}
-
-.slider-wrap.active .slider-value {
-  opacity: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 /* ── Responsive / Touch ──────────────────────────────────── */
@@ -225,14 +198,14 @@ input[type="range"]:active::-moz-range-thumb {
     height: 48px;
   }
 
-  input[type="range"]::-webkit-slider-thumb {
-    width: 26px;
-    height: 42px;
+  .slider-thumb {
+    min-width: 34px;
+    height: 26px;
+    font-size: 0.75em;
   }
 
-  input[type="range"]::-moz-range-thumb {
-    width: 26px;
-    height: 42px;
+  .slider-wrap {
+    height: 3.2em;
   }
 }
 
