@@ -1,2 +1,0 @@
-# linear
-visual linear algebra
