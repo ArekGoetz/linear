@@ -9,15 +9,52 @@
   }
   new ResizeObserver(sizeCanvas).observe(canvas);
 
-  /* ── Picker canvas sizing ──────────────────────────── */
+  /* ── Picker canvas + grid ───────────────────────────── */
   const pickerCanvas = document.getElementById("picker_canvas");
+  let pickerCtx = null;
+  let currentGridSize = 20; // 2 * cycle default (10)
+
   if (pickerCanvas) {
-    const pCtx = pickerCanvas.getContext("2d");
+    pickerCtx = pickerCanvas.getContext("2d");
+
     function sizePickerCanvas() {
       pickerCanvas.width = pickerCanvas.clientWidth;
       pickerCanvas.height = pickerCanvas.clientHeight;
+      drawPickerGrid();
     }
     new ResizeObserver(sizePickerCanvas).observe(pickerCanvas);
+  }
+
+  function drawPickerGrid() {
+    if (!pickerCtx) return;
+    const w = pickerCanvas.width;
+    const h = pickerCanvas.height;
+    if (w === 0 || h === 0) return;
+
+    pickerCtx.clearRect(0, 0, w, h);
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    pickerCtx.lineWidth = 1;
+
+    const cellW = w / currentGridSize;
+    const cellH = h / currentGridSize;
+
+    pickerCtx.beginPath();
+    for (let i = 0; i <= currentGridSize; i++) {
+      const x = Math.round(i * cellW) + 0.5;
+      pickerCtx.moveTo(x, 0);
+      pickerCtx.lineTo(x, h);
+    }
+    for (let i = 0; i <= currentGridSize; i++) {
+      const y = Math.round(i * cellH) + 0.5;
+      pickerCtx.moveTo(0, y);
+      pickerCtx.lineTo(w, y);
+    }
+    pickerCtx.stroke();
+  }
+
+  function setPickerGridSize(n) {
+    currentGridSize = n;
+    drawPickerGrid();
   }
 
   /* ── Panel resize ──────────────────────────────────── */
@@ -275,16 +312,23 @@
     if (el.id) sliders[el.id] = s;
   });
 
-  // Wire cycle → length dependency
+  // Wire cycle → length + picker grid
   const cycle = sliders.sl_cycle;
   const length = sliders.sl_length;
 
-  if (cycle && length) {
-    // Set initial length default to floor(cycle / 2)
-    length.setValue(Math.floor(cycle.displayValue / 2));
+  if (cycle) {
+    // Set initial grid
+    setPickerGridSize(2 * cycle.displayValue);
+
+    if (length) {
+      length.setValue(Math.floor(cycle.displayValue / 2));
+    }
 
     cycle.onChange = (cycleVal) => {
-      length.setValue(Math.floor(cycleVal / 2));
+      setPickerGridSize(2 * cycleVal);
+      if (length) {
+        length.setValue(Math.floor(cycleVal / 2));
+      }
     };
   }
 

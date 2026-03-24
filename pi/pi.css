@@ -66,7 +66,7 @@ html, body {
   display: flex;
   flex-direction: column;
   padding: 1em;
-  gap: 0.5em;
+  gap: 0.2em;
   font-size: var(--panel-font);
   overflow: hidden;
   overflow-y: auto;
@@ -135,16 +135,19 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-top: 0.4em;
 }
 
 /* ── Sturmian Picker Box ────────────────────────────────── */
 .picker-box {
   width: 100%;
   aspect-ratio: 1;
-  background: rgba(60, 60, 66, 0.5);
+  background: #3a3a42;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
+  position: relative;
 }
 
 .picker-box canvas {
@@ -180,7 +183,7 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-bottom: 0.15em;
+  line-height: 1;
 }
 
 .pi-slider__rail {
