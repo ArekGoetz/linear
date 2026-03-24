@@ -16,6 +16,8 @@
   --slider-track: rgba(255, 255, 255, 0.08);
   --slider-fill: rgba(255, 255, 255, 0.22);
   --slider-thumb-bg: rgba(220, 220, 225, 0.92);
+  --slider-thumb-bg-even: rgba(230, 225, 210, 0.92);
+  --slider-thumb-bg-frac: rgba(190, 190, 195, 0.88);
   --transition-snap: 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -69,7 +71,7 @@ html, body {
   overflow: hidden;
   touch-action: none;
   will-change: width;
-  --panel-font: calc(var(--panel-width) / 15);
+  --panel-font: min(calc(var(--panel-width) / 10), 18px);
 }
 
 /* Snapping transitions driven from #playground.snapping ancestor */
@@ -141,20 +143,25 @@ html, body {
   text-overflow: ellipsis;
 }
 
-/* ── Custom Slider ───────────────────────────────────────── */
-.slider-wrap {
-  position: relative;
+/* ── PiSlider ───────────────────────────────────────────── */
+.pi-slider {
   width: 100%;
-  height: 2.4em;
-  display: flex;
-  align-items: center;
+  padding: 0 1em;
   touch-action: none;
   cursor: ew-resize;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.slider-track {
+.pi-slider__rail {
+  position: relative;
+  width: 100%;
+  height: 2.4em;
+  display: flex;
+  align-items: center;
+}
+
+.pi-slider__track {
   position: absolute;
   left: 0;
   right: 0;
@@ -164,7 +171,7 @@ html, body {
   pointer-events: none;
 }
 
-.slider-fill {
+.pi-slider__fill {
   position: absolute;
   left: 0;
   height: 3px;
@@ -174,14 +181,13 @@ html, body {
   pointer-events: none;
 }
 
-/* Oval thumb — dynamically sized around its content */
-.slider-thumb {
+.pi-slider__thumb {
   position: absolute;
   top: 50%;
   left: var(--slider-pct, 0%);
   transform: translate(-50%, -50%);
   width: fit-content;
-  padding: 0.25em 0.6em;
+  padding: 0.25em 1em;
   border-radius: 999px;
   background: var(--slider-thumb-bg);
   display: flex;
@@ -194,6 +200,16 @@ html, body {
   color: var(--bg);
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: background-color 0.15s;
+}
+
+/* Thumb color driven by CSS attribute selectors — JS only sets data-parity */
+.pi-slider[data-parity="even"] .pi-slider__thumb {
+  background: var(--slider-thumb-bg-even);
+}
+
+.pi-slider[data-parity="frac"] .pi-slider__thumb {
+  background: var(--slider-thumb-bg-frac);
 }
 
 /* ── Responsive / Touch ──────────────────────────────────── */
@@ -203,12 +219,12 @@ html, body {
     height: 48px;
   }
 
-  .slider-thumb {
-    padding: 0.35em 0.7em;
+  .pi-slider__thumb {
+    padding: 0.35em 1em;
     font-size: 0.75em;
   }
 
-  .slider-wrap {
+  .pi-slider__rail {
     height: 3.2em;
   }
 }
