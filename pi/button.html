@@ -14,10 +14,18 @@
     <div id="resize_handle"></div>
 
     <div id="input_panel">
-      <div class="panel-section">
-        <label class="panel-label">Value</label>
-        <div class="pi-slider" data-name="Value" data-min="0" data-max="1000" data-step="1" data-scale="exp"></div>
+
+      <label class="panel-label">Sturmian picker</label>
+      <div class="picker-box">
+        <canvas id="picker_canvas"></canvas>
       </div>
+
+      <div class="pi-slider" id="sl_offset" data-name="offset" data-min="0" data-max="1" data-step="0.01" data-scale="lin" data-value="0"></div>
+
+      <div class="pi-slider" id="sl_cycle" data-name="cycle" data-min="2" data-max="48" data-step="1" data-scale="quadratic"></div>
+
+      <div class="pi-slider" id="sl_length" data-name="length" data-min="1" data-max="96" data-step="1" data-scale="lin"></div>
+
     </div>
   </div>
 

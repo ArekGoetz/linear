@@ -14,7 +14,7 @@
   --text-dim: rgba(255, 255, 255, 0.45);
   --handle-dot: rgba(255, 255, 255, 0.35);
   --slider-track: rgba(255, 255, 255, 0.08);
-  --slider-fill: rgba(255, 255, 255, 0.22);
+  --slider-fill: rgba(239, 239, 239, 0.30);
   --slider-thumb-bg: rgba(220, 220, 225, 0.92);
   --slider-thumb-bg-even: rgba(240, 225, 185, 0.94);
   --slider-thumb-bg-frac: rgba(190, 190, 195, 0.88);
@@ -65,10 +65,11 @@ html, body {
   z-index: 2;
   display: flex;
   flex-direction: column;
-  padding: calc(var(--panel-font) * 0.5);
-  gap: calc(var(--panel-font) * 0.5);
+  padding: 1em;
+  gap: 0.5em;
   font-size: var(--panel-font);
   overflow: hidden;
+  overflow-y: auto;
   touch-action: none;
   will-change: width;
   --panel-font: min(calc(var(--panel-width) / 8), 24px);
@@ -126,13 +127,6 @@ html, body {
 }
 
 /* ── Panel Content ───────────────────────────────────────── */
-.panel-section {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--panel-font) * 0.5);
-}
-
 .panel-label {
   font-size: 0.75em;
   text-transform: uppercase;
@@ -141,6 +135,22 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Sturmian Picker Box ────────────────────────────────── */
+.picker-box {
+  width: 100%;
+  aspect-ratio: 1;
+  background: rgba(60, 60, 66, 0.5);
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.picker-box canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
@@ -159,6 +169,18 @@ html, body {
 
 .pi-slider:focus-visible .pi-slider__thumb {
   box-shadow: 0 0 0 2px var(--slider-fill), 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Slider label auto-generated above rail */
+.pi-slider__label {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-bottom: 0.15em;
 }
 
 .pi-slider__rail {
@@ -195,7 +217,7 @@ html, body {
   left: var(--slider-pct, 0%);
   transform: translate(-50%, -50%);
   width: fit-content;
-  padding: 0.25em 1em;
+  padding: 0.15em 0.55em;
   border-radius: 999px;
   background: var(--slider-thumb-bg);
   display: flex;
@@ -228,7 +250,7 @@ html, body {
   }
 
   .pi-slider__thumb {
-    padding: 0.35em 1em;
+    padding: 0.25em 0.65em;
     font-size: 0.75em;
   }
 
