@@ -67,58 +67,158 @@
     pg.classList.remove("snapping");
   });
 
-  /* ── Custom slider logic ───────────────────────────── */
-  function initSlider(wrap) {
-    const min = Number(wrap.dataset.min) || 0;
-    const max = Number(wrap.dataset.max) || 1000;
-    const step = Number(wrap.dataset.step) || 1;
-    const isExp = wrap.dataset.exp === "true";
-    const thumb = wrap.querySelector(".slider-thumb");
+  /* ── PiSlider ──────────────────────────────────────── */
+  /*
+   * Reusable slider component.
+   *
+   * HTML usage:
+   *   <div class="pi-slider"
+   *        data-name="MyVar"
+   *        data-min="0" data-max="1000"
+   *        data-step="1"
+   *        data-scale="exp">
+   *   </div>
+   *
+   * data-scale: "lin" (default) | "exp" | "log" | "quadratic"
+   * data-name:  variable label (displayed above slider)
+   * data-min / data-max / data-step: range config
+   *
+   * The slider auto-generates its inner DOM and manages all
+   * interaction. Read the current display value via .displayValue.
+   */
 
-    let value = Number(wrap.dataset.value) || min;
-    let isDragging = false;
+  const SCALES = {
+    lin(t, min, max) {
+      return min + t * (max - min);
+    },
+    exp(t, min, max) {
+      return ((Math.pow(10, t * 3) - 1) / 999) * (max - min) + min;
+    },
+    log(t, min, max) {
+      const lo = Math.max(min, 1e-6);
+      return Math.exp(Math.log(lo) + t * (Math.log(max) - Math.log(lo)));
+    },
+    quadratic(t, min, max) {
+      return min + t * t * (max - min);
+    },
+  };
 
-    function linToExp(lin) {
-      const t = (lin - min) / (max - min);
-      return Math.round(((Math.pow(10, t * 3) - 1) / 999) * (max - min) + min);
+  class PiSlider {
+    constructor(el) {
+      this.el = el;
+      this.min = Number(el.dataset.min) || 0;
+      this.max = Number(el.dataset.max) || 1000;
+      this.step = Number(el.dataset.step) || 1;
+      this.scaleFn = SCALES[el.dataset.scale] || SCALES.lin;
+      this.name = el.dataset.name || "";
+
+      this._value = Number(el.dataset.value) || this.min;
+      this._dragging = false;
+      this._pointerId = null;
+
+      this._buildDOM();
+      this._bind();
+      this._update();
     }
 
-    function pctFromX(clientX) {
-      const rect = wrap.getBoundingClientRect();
+    get displayValue() {
+      const raw = this.scaleFn(
+        (this._value - this.min) / (this.max - this.min),
+        this.min,
+        this.max
+      );
+      return Number.isInteger(this.step) ? Math.round(raw) : +raw.toFixed(2);
+    }
+
+    _buildDOM() {
+      const rail = document.createElement("div");
+      rail.className = "pi-slider__rail";
+
+      const track = document.createElement("div");
+      track.className = "pi-slider__track";
+
+      const fill = document.createElement("div");
+      fill.className = "pi-slider__fill";
+
+      const thumb = document.createElement("div");
+      thumb.className = "pi-slider__thumb";
+
+      rail.append(track, fill, thumb);
+      this.el.appendChild(rail);
+
+      this._rail = rail;
+      this._thumb = thumb;
+    }
+
+    _bind() {
+      this.el.addEventListener("pointerdown", (e) => this._onDown(e));
+      this.el.addEventListener("pointermove", (e) => this._onMove(e));
+      this.el.addEventListener("pointerup", (e) => this._onUp(e));
+      this.el.addEventListener("pointercancel", (e) => this._onUp(e));
+      this.el.addEventListener("lostpointercapture", () => this._release());
+    }
+
+    _pctFromX(clientX) {
+      const rect = this._rail.getBoundingClientRect();
       return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     }
 
-    function update() {
-      const pct = ((value - min) / (max - min)) * 100;
-      wrap.style.setProperty("--slider-pct", pct + "%");
-      const display = isExp ? linToExp(value) : value;
-      thumb.textContent = display;
+    _valueFromPct(pct) {
+      let v = this.min + pct * (this.max - this.min);
+      v = Math.round(v / this.step) * this.step;
+      return Math.max(this.min, Math.min(this.max, v));
     }
 
-    wrap.addEventListener("pointerdown", (e) => {
+    _onDown(e) {
       e.preventDefault();
-      wrap.setPointerCapture(e.pointerId);
-      isDragging = true;
+      this.el.setPointerCapture(e.pointerId);
+      this._pointerId = e.pointerId;
+      this._dragging = true;
+      this._value = this._valueFromPct(this._pctFromX(e.clientX));
+      this._update();
+    }
 
-      const pct = pctFromX(e.clientX);
-      value = Math.round((min + pct * (max - min)) / step) * step;
-      update();
-    });
+    _onMove(e) {
+      if (!this._dragging) return;
+      this._value = this._valueFromPct(this._pctFromX(e.clientX));
+      this._update();
+    }
 
-    wrap.addEventListener("pointermove", (e) => {
-      if (!isDragging) return;
-      const pct = pctFromX(e.clientX);
-      value = Math.round((min + pct * (max - min)) / step) * step;
-      value = Math.max(min, Math.min(max, value));
-      update();
-    });
+    _onUp(e) {
+      if (!this._dragging) return;
+      this._release();
+      if (this._pointerId !== null) {
+        try { this.el.releasePointerCapture(this._pointerId); } catch (_) {}
+      }
+    }
 
-    wrap.addEventListener("pointerup", () => { isDragging = false; });
-    wrap.addEventListener("pointercancel", () => { isDragging = false; });
+    _release() {
+      this._dragging = false;
+      this._pointerId = null;
+    }
 
-    update();
+    _update() {
+      const pct = ((this._value - this.min) / (this.max - this.min)) * 100;
+      this._rail.style.setProperty("--slider-pct", pct + "%");
+
+      const display = this.displayValue;
+      this._thumb.textContent = display;
+
+      // Set parity attribute — CSS handles the background color
+      if (!Number.isInteger(display)) {
+        this.el.dataset.parity = "frac";
+      } else if (display % 2 === 0) {
+        this.el.dataset.parity = "even";
+      } else {
+        this.el.dataset.parity = "odd";
+      }
+    }
   }
 
-  document.querySelectorAll(".slider-wrap").forEach(initSlider);
+  // Auto-init all .pi-slider elements
+  document.querySelectorAll(".pi-slider").forEach((el) => new PiSlider(el));
+
+  // Expose for programmatic creation
+  window.PiSlider = PiSlider;
 
 })();
