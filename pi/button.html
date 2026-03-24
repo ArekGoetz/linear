@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Pi — Button</title>
+  <link rel="stylesheet" href="pi.css">
+</head>
+<body>
+
+  <div id="playground">
+    <canvas id="canvas"></canvas>
+
+    <div id="input_panel">
+      <div id="resize_handle"></div>
+
+      <div class="panel-section">
+        <label class="panel-label" for="exp_slider">Value</label>
+        <div class="slider-wrap">
+          <input type="range" id="exp_slider" min="0" max="1000" step="1" value="0">
+          <span class="slider-value" id="slider_val">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      /* ── Canvas sizing ─────────────────────────────────── */
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      function sizeCanvas() {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+      }
+      new ResizeObserver(sizeCanvas).observe(canvas);
+
+      /* ── Panel resize ──────────────────────────────────── */
+      const panel = document.getElementById("input_panel");
+      const handle = document.getElementById("resize_handle");
+      const snaps = [1, 120, 180, 240, 360, 480];
+
+      let dragging = false;
+      let startX, startW;
+
+      function beginDrag(x) {
+        dragging = true;
+        startX = x;
+        startW = panel.offsetWidth;
+        panel.classList.remove("snapping");
+        document.body.style.cursor = "ew-resize";
+        document.body.style.userSelect = "none";
+      }
+
+      function moveDrag(x) {
+        if (!dragging) return;
+        const delta = startX - x;
+        const w = Math.max(0, startW + delta);
+        const maxW = panel.parentElement.clientWidth * 0.85;
+        panel.style.setProperty("--panel-width", Math.min(w, maxW) + "px");
+      }
+
+      function endDrag() {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+
+        const cur = panel.offsetWidth;
+        const nearest = snaps.reduce((a, b) =>
+          Math.abs(b - cur) < Math.abs(a - cur) ? b : a
+        );
+
+        panel.classList.add("snapping");
+        panel.style.setProperty("--panel-width", nearest + "px");
+      }
+
+      // Pointer events (mouse + touch unified)
+      handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        handle.setPointerCapture(e.pointerId);
+        beginDrag(e.clientX);
+      });
+      handle.addEventListener("pointermove", (e) => moveDrag(e.clientX));
+      handle.addEventListener("pointerup", endDrag);
+      handle.addEventListener("pointercancel", endDrag);
+
+      /* ── Exponential slider ────────────────────────────── */
+      const slider = document.getElementById("exp_slider");
+      const valDisplay = document.getElementById("slider_val");
+      const wrap = slider.closest(".slider-wrap");
+
+      function linToExp(lin) {
+        // Map 0–1000 linear → 0–1000 exponential
+        const t = lin / 1000;
+        return Math.round((Math.pow(10, t * 3) - 1) / 999 * 1000);
+      }
+
+      function updateSlider() {
+        const lin = Number(slider.value);
+        const pct = (lin / 1000) * 100;
+        const expVal = linToExp(lin);
+
+        slider.style.setProperty("--slider-pct", pct + "%");
+        valDisplay.textContent = expVal;
+        valDisplay.style.left = pct + "%";
+      }
+
+      slider.addEventListener("input", updateSlider);
+      slider.addEventListener("pointerdown", () => wrap.classList.add("active"));
+      slider.addEventListener("pointerup", () => wrap.classList.remove("active"));
+      slider.addEventListener("pointercancel", () => wrap.classList.remove("active"));
+
+      updateSlider();
+    })();
+  </script>
+
+</body>
+</html>
