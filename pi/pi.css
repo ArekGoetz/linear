@@ -16,7 +16,7 @@
   --slider-track: rgba(255, 255, 255, 0.08);
   --slider-fill: rgba(255, 255, 255, 0.22);
   --slider-thumb-bg: rgba(220, 220, 225, 0.92);
-  --slider-thumb-bg-even: rgba(230, 225, 210, 0.92);
+  --slider-thumb-bg-even: rgba(240, 225, 185, 0.94);
   --slider-thumb-bg-frac: rgba(190, 190, 195, 0.88);
   --transition-snap: 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -71,7 +71,7 @@ html, body {
   overflow: hidden;
   touch-action: none;
   will-change: width;
-  --panel-font: min(calc(var(--panel-width) / 10), 18px);
+  --panel-font: min(calc(var(--panel-width) / 8), 24px);
 }
 
 /* Snapping transitions driven from #playground.snapping ancestor */
@@ -151,6 +151,14 @@ html, body {
   cursor: ew-resize;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.pi-slider:focus {
+  outline: none;
+}
+
+.pi-slider:focus-visible .pi-slider__thumb {
+  box-shadow: 0 0 0 2px var(--slider-fill), 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 .pi-slider__rail {

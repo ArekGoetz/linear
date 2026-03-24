@@ -31,12 +31,13 @@
     document.body.style.userSelect = "none";
   }
 
+  const maxSnap = Math.max(...snaps);
+
   function moveDrag(x) {
     if (!dragging) return;
     const delta = startX - x;
-    const w = Math.max(0, startW + delta);
-    const maxW = pg.clientWidth * 0.85;
-    setPanelWidth(Math.min(w, maxW));
+    const w = Math.max(0, Math.min(startW + delta, maxSnap));
+    setPanelWidth(w);
   }
 
   function endDrag() {
@@ -131,6 +132,11 @@
     }
 
     _buildDOM() {
+      this.el.tabIndex = 0;
+      this.el.setAttribute("role", "slider");
+      this.el.setAttribute("aria-valuemin", this.min);
+      this.el.setAttribute("aria-valuemax", this.max);
+
       const rail = document.createElement("div");
       rail.className = "pi-slider__rail";
 
@@ -156,6 +162,7 @@
       this.el.addEventListener("pointerup", (e) => this._onUp(e));
       this.el.addEventListener("pointercancel", (e) => this._onUp(e));
       this.el.addEventListener("lostpointercapture", () => this._release());
+      this.el.addEventListener("keydown", (e) => this._onKey(e));
     }
 
     _pctFromX(clientX) {
@@ -171,6 +178,7 @@
 
     _onDown(e) {
       e.preventDefault();
+      this.el.focus();
       this.el.setPointerCapture(e.pointerId);
       this._pointerId = e.pointerId;
       this._dragging = true;
@@ -184,12 +192,27 @@
       this._update();
     }
 
-    _onUp(e) {
+    _onUp() {
       if (!this._dragging) return;
+      const pid = this._pointerId;
       this._release();
-      if (this._pointerId !== null) {
-        try { this.el.releasePointerCapture(this._pointerId); } catch (_) {}
+      if (pid !== null) {
+        try { this.el.releasePointerCapture(pid); } catch (_) {}
       }
+    }
+
+    _onKey(e) {
+      const big = e.shiftKey ? 10 : 1;
+      let delta = 0;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") delta = this.step * big;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowDown") delta = -this.step * big;
+      else if (e.key === "Home") { this._value = this.min; this._update(); e.preventDefault(); return; }
+      else if (e.key === "End") { this._value = this.max; this._update(); e.preventDefault(); return; }
+      else return;
+
+      e.preventDefault();
+      this._value = Math.max(this.min, Math.min(this.max, this._value + delta));
+      this._update();
     }
 
     _release() {
@@ -203,6 +226,7 @@
 
       const display = this.displayValue;
       this._thumb.textContent = display;
+      this.el.setAttribute("aria-valuenow", display);
 
       // Set parity attribute — CSS handles the background color
       if (!Number.isInteger(display)) {
