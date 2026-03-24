@@ -9,12 +9,12 @@
 
 :root {
   --bg: #111113;
-  --surface: rgba(24, 24, 28, 0.80);
+  --surface: #2a2a30;
   --text: rgb(239, 239, 239);
-  --text-dim: rgba(255, 255, 255, 0.45);
+  --text-dim: rgb(200, 200, 200);
   --handle-dot: rgba(255, 255, 255, 0.35);
-  --slider-track: rgba(255, 255, 255, 0.08);
-  --slider-fill: rgba(239, 239, 239, 0.30);
+  --slider-track: rgba(255, 255, 255, 0.10);
+  --slider-fill: rgb(200, 200, 205);
   --slider-thumb-bg: rgba(220, 220, 225, 0.92);
   --slider-thumb-bg-even: rgba(240, 225, 185, 0.94);
   --slider-thumb-bg-frac: rgba(190, 190, 195, 0.88);
