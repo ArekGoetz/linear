@@ -9,6 +9,17 @@
   }
   new ResizeObserver(sizeCanvas).observe(canvas);
 
+  /* ── Picker canvas sizing ──────────────────────────── */
+  const pickerCanvas = document.getElementById("picker_canvas");
+  if (pickerCanvas) {
+    const pCtx = pickerCanvas.getContext("2d");
+    function sizePickerCanvas() {
+      pickerCanvas.width = pickerCanvas.clientWidth;
+      pickerCanvas.height = pickerCanvas.clientHeight;
+    }
+    new ResizeObserver(sizePickerCanvas).observe(pickerCanvas);
+  }
+
   /* ── Panel resize ──────────────────────────────────── */
   const panel = document.getElementById("input_panel");
   const handle = document.getElementById("resize_handle");
@@ -74,18 +85,21 @@
    *
    * HTML usage:
    *   <div class="pi-slider"
-   *        data-name="MyVar"
-   *        data-min="0" data-max="1000"
+   *        data-name="cycle"
+   *        data-min="2" data-max="48"
    *        data-step="1"
-   *        data-scale="exp">
+   *        data-scale="quadratic">
    *   </div>
    *
    * data-scale: "lin" (default) | "exp" | "log" | "quadratic"
-   * data-name:  variable label (displayed above slider)
+   * data-name:  variable name (shown as label above the slider)
    * data-min / data-max / data-step: range config
+   * data-value: optional initial value (defaults to min)
    *
-   * The slider auto-generates its inner DOM and manages all
-   * interaction. Read the current display value via .displayValue.
+   * API:
+   *   slider.displayValue  — current mapped display value
+   *   slider.setValue(v)    — set raw internal value, triggers update
+   *   slider.onChange       — callback(displayValue) on every change
    */
 
   const SCALES = {
@@ -112,8 +126,9 @@
       this.step = Number(el.dataset.step) || 1;
       this.scaleFn = SCALES[el.dataset.scale] || SCALES.lin;
       this.name = el.dataset.name || "";
+      this.onChange = null;
 
-      this._value = Number(el.dataset.value) || this.min;
+      this._value = el.dataset.value !== undefined ? Number(el.dataset.value) : this.min;
       this._dragging = false;
       this._pointerId = null;
 
@@ -131,11 +146,23 @@
       return Number.isInteger(this.step) ? Math.round(raw) : +raw.toFixed(2);
     }
 
+    setValue(v) {
+      this._value = Math.max(this.min, Math.min(this.max, v));
+      this._update();
+    }
+
     _buildDOM() {
       this.el.tabIndex = 0;
       this.el.setAttribute("role", "slider");
       this.el.setAttribute("aria-valuemin", this.min);
       this.el.setAttribute("aria-valuemax", this.max);
+
+      if (this.name) {
+        const label = document.createElement("div");
+        label.className = "pi-slider__label";
+        label.textContent = this.name;
+        this.el.appendChild(label);
+      }
 
       const rail = document.createElement("div");
       rail.className = "pi-slider__rail";
@@ -236,11 +263,30 @@
       } else {
         this.el.dataset.parity = "odd";
       }
+
+      if (this.onChange) this.onChange(display);
     }
   }
 
-  // Auto-init all .pi-slider elements
-  document.querySelectorAll(".pi-slider").forEach((el) => new PiSlider(el));
+  // Auto-init all .pi-slider elements, store by id for wiring
+  const sliders = {};
+  document.querySelectorAll(".pi-slider").forEach((el) => {
+    const s = new PiSlider(el);
+    if (el.id) sliders[el.id] = s;
+  });
+
+  // Wire cycle → length dependency
+  const cycle = sliders.sl_cycle;
+  const length = sliders.sl_length;
+
+  if (cycle && length) {
+    // Set initial length default to floor(cycle / 2)
+    length.setValue(Math.floor(cycle.displayValue / 2));
+
+    cycle.onChange = (cycleVal) => {
+      length.setValue(Math.floor(cycleVal / 2));
+    };
+  }
 
   // Expose for programmatic creation
   window.PiSlider = PiSlider;
