@@ -128,8 +128,10 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Compute Sturmian word: -1 = horizontal (blue), 1 = vertical (green)
-  // Rule: horizontal if staircase is on/above the line (incl. grid points), vertical if below
+  // Compute Sturmian word via crossing-sequence algorithm:
+  // Line crosses vertical grid (x=int) → horizontal step → green (1)
+  // Line crosses horizontal grid (y=int) → vertical step → blue (-1)
+  // At grid points (tie) → blue (-1), go horizontal
   // Guards ensure exactly p horizontal and k vertical steps = period
   function computeSturmianWord(p, k, offset) {
     if (p === 0) return [];
@@ -139,15 +141,22 @@
     let hCount = 0, vCount = 0;
     for (let step = 0; step < p + k; step++) {
       if (hCount >= p) {
-        word.push(1); y++; vCount++;
+        word.push(-1); y++; vCount++;
       } else if (vCount >= k) {
-        word.push(-1); x++; hCount++;
+        word.push(1); x++; hCount++;
       } else {
-        const lineY = (k / p) * x + offset;
-        if (y >= lineY - eps) {
-          word.push(-1); x++; hCount++;
+        // Crossing times: next vertical grid at x+1, next horizontal grid at y+1
+        const tv = (x + 1) / p;
+        const th = ((y + 1) - offset) / k;
+        if (tv < th - eps) {
+          // Vertical grid crossed first → horizontal step → green
+          word.push(1); x++; hCount++;
+        } else if (th < tv - eps) {
+          // Horizontal grid crossed first → vertical step → blue
+          word.push(-1); y++; vCount++;
         } else {
-          word.push(1); y++; vCount++;
+          // Grid point (tie) → blue, go horizontal
+          word.push(-1); x++; hCount++;
         }
       }
     }
@@ -204,15 +213,21 @@
     let x = 0, y = Math.floor(currentOffset);
     let hCount = 0, vCount = 0;
     for (let step = 0; step < p + k; step++) {
-      let goH;
+      let goH, isGridPoint = false;
       if (hCount >= p) goH = false;
       else if (vCount >= k) goH = true;
       else {
-        const lineY = (k / p) * x + currentOffset;
-        goH = (y >= lineY - eps);
+        const tv = (x + 1) / p;
+        const th = ((y + 1) - currentOffset) / k;
+        if (tv < th - eps) goH = true;
+        else if (th < tv - eps) goH = false;
+        else { goH = true; isGridPoint = true; }
       }
       if (goH) {
-        pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
+        // Horizontal step (crossing vertical grid) → green, grid point → blue
+        pickerCtx.strokeStyle = isGridPoint
+          ? "rgba(80, 140, 255, 0.85)"
+          : "rgba(80, 220, 80, 0.85)";
         pickerCtx.lineWidth = 3;
         pickerCtx.beginPath();
         pickerCtx.moveTo(x * cellW, (n - y) * cellH);
@@ -220,7 +235,8 @@
         pickerCtx.stroke();
         x++; hCount++;
       } else {
-        pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
+        // Vertical step (crossing horizontal grid) → blue
+        pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.lineWidth = 3;
         pickerCtx.beginPath();
         pickerCtx.moveTo(x * cellW, (n - y) * cellH);
