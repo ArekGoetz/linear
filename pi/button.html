@@ -26,14 +26,15 @@
 
       <div class="sturmian-group">
         <div class="panel-label">Sturmian picker</div>
+        <div id="slope_display" class="slope-display"></div>
         <div class="picker-box" id="picker_box">
           <canvas id="picker_canvas"></canvas>
-          <div id="picker_tooltip"></div>
         </div>
-        <div id="slope_display" class="slope-display"></div>
       </div>
 
-      <div class="pi-slider" id="sl_offset" data-min="0" data-max="1" data-step="0.01" data-scale="lin" data-value="0" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="1">
+      <div id="picker_tooltip"></div>
+
+      <div class="pi-slider" id="sl_offset" data-min="-0.5" data-max="0.5" data-step="0.01" data-scale="lin" data-value="0" tabindex="0" role="slider" aria-valuemin="-0.5" aria-valuemax="0.5">
         <div class="pi-slider__label">offset</div>
         <div class="pi-slider__rail">
           <div class="pi-slider__track"></div>
