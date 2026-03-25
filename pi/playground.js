@@ -92,6 +92,7 @@
   const inputPanel = document.getElementById("input_panel");
   let currentGridN = 20;
   let hoveredVertex = null;
+  let lockedVertex = null;  // persists after click
   let currentOffset = 0; // kept in sync by offset slider onChange
 
   function gcd(a, b) {
@@ -101,26 +102,6 @@
 
   function fracHTML(num, den) {
     return `<span class="vfrac"><span class="vfrac__num">${num}</span><span class="vfrac__den">${den}</span></span>`;
-  }
-
-  // Clip line y = s*x + b to canvas rectangle [0,w] x [0,h]
-  function clipLine(s, b, w, h) {
-    const pts = [];
-    const add = (x, y) => {
-      if (x >= -0.5 && x <= w + 0.5 && y >= -0.5 && y <= h + 0.5) {
-        const cx = Math.max(0, Math.min(w, x));
-        const cy = Math.max(0, Math.min(h, y));
-        if (!pts.some(p => Math.abs(p[0] - cx) < 0.5 && Math.abs(p[1] - cy) < 0.5))
-          pts.push([cx, cy]);
-      }
-    };
-    add(0, b);
-    add(w, s * w + b);
-    if (Math.abs(s) > 1e-9) {
-      add(-b / s, 0);
-      add((h - b) / s, h);
-    }
-    return pts.slice(0, 2);
   }
 
   function drawSturmianLine(p, k) {
@@ -134,7 +115,6 @@
     pickerCtx.lineWidth = 1;
 
     if (p === 0) {
-      // Vertical line at x = 0 (left border)
       pickerCtx.beginPath();
       pickerCtx.moveTo(0, 0);
       pickerCtx.lineTo(0, h);
@@ -142,17 +122,46 @@
       return;
     }
 
-    // Math: y_math = (k/p)*x_math + currentOffset
-    // Canvas: canvas_x = x_math*cellW, canvas_y = (n - y_math)*cellH
-    // => canvas_y = h - (k/p)*(h/w)*canvas_x - currentOffset*cellH
-    const s = -(k / p) * (cellH / cellW);
-    const b = h - currentOffset * cellH;
-    const pts = clipLine(s, b, w, h);
-    if (pts.length < 2) return;
+    // Line from (0, offset) to (p, k + offset) in math coords
+    const cx0 = 0;
+    const cy0 = (n - currentOffset) * cellH;
+    const cx1 = p * cellW;
+    const cy1 = (n - k - currentOffset) * cellH;
     pickerCtx.beginPath();
-    pickerCtx.moveTo(pts[0][0], pts[0][1]);
-    pickerCtx.lineTo(pts[1][0], pts[1][1]);
+    pickerCtx.moveTo(cx0, cy0);
+    pickerCtx.lineTo(cx1, cy1);
     pickerCtx.stroke();
+  }
+
+  function drawStaircase(p, k) {
+    if (p === 0) return;
+    const n = currentGridN;
+    const cellW = pickerCanvas.width / n;
+    const cellH = pickerCanvas.height / n;
+    const alpha = k / p;
+
+    for (let x = 0; x < p; x++) {
+      const yCur  = Math.floor(alpha * x + currentOffset);
+      const yNext = Math.floor(alpha * (x + 1) + currentOffset);
+
+      // Horizontal segment: (x, yCur) → (x+1, yCur) — blue
+      pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
+      pickerCtx.lineWidth = 1.5;
+      pickerCtx.beginPath();
+      pickerCtx.moveTo(x * cellW, (n - yCur) * cellH);
+      pickerCtx.lineTo((x + 1) * cellW, (n - yCur) * cellH);
+      pickerCtx.stroke();
+
+      // Vertical segment: (x+1, yCur) → (x+1, yNext) — green
+      if (yNext !== yCur) {
+        pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
+        pickerCtx.lineWidth = 1.5;
+        pickerCtx.beginPath();
+        pickerCtx.moveTo((x + 1) * cellW, (n - yCur) * cellH);
+        pickerCtx.lineTo((x + 1) * cellW, (n - yNext) * cellH);
+        pickerCtx.stroke();
+      }
+    }
   }
 
   function drawSturmianPicker() {
@@ -195,8 +204,17 @@
       }
     }
 
-    // Dynamic Sturmian line when hovering a vertex
-    if (hoveredVertex) drawSturmianLine(hoveredVertex.p, hoveredVertex.k);
+    // Locked line + staircase (persistent after click)
+    if (lockedVertex) {
+      drawSturmianLine(lockedVertex.p, lockedVertex.k);
+      drawStaircase(lockedVertex.p, lockedVertex.k);
+    }
+    // Hovered line + staircase (temporary, skip if same as locked)
+    if (hoveredVertex && (!lockedVertex ||
+        hoveredVertex.p !== lockedVertex.p || hoveredVertex.k !== lockedVertex.k)) {
+      drawSturmianLine(hoveredVertex.p, hoveredVertex.k);
+      drawStaircase(hoveredVertex.p, hoveredVertex.k);
+    }
   }
 
   function nearestCoprimeVertex(mouseX, mouseY, boxW, boxH) {
@@ -227,30 +245,50 @@
 
     if (hit) {
       hoveredVertex = hit;
-      if (hit.p !== prevP || hit.k !== prevK) drawSturmianPicker();
-      // Tooltip: fixed position in viewport, font from panel
+      if (hit.p !== prevP || hit.k !== prevK) {
+        drawSturmianPicker();
+        slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(hit.k, hit.p);
+      }
       pickerTooltip.style.fontSize = getComputedStyle(inputPanel).fontSize;
       pickerTooltip.innerHTML = fracHTML(hit.k, hit.p);
       pickerTooltip.style.left = (rect.left + hit.vx) + "px";
       pickerTooltip.style.top  = (rect.top  + hit.vy) + "px";
       pickerTooltip.style.opacity = "1";
     } else {
-      if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
+      if (hoveredVertex) {
+        hoveredVertex = null;
+        drawSturmianPicker();
+        // Revert slope to locked vertex or default
+        if (lockedVertex) {
+          slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(lockedVertex.k, lockedVertex.p);
+        }
+      }
       pickerTooltip.style.opacity = "0";
     }
   });
 
   pickerCanvas.addEventListener("mouseleave", () => {
-    if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
+    if (hoveredVertex) {
+      hoveredVertex = null;
+      drawSturmianPicker();
+      if (lockedVertex) {
+        slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(lockedVertex.k, lockedVertex.p);
+      }
+    }
     pickerTooltip.style.opacity = "0";
   });
 
+  // Click locks the line + staircase persistently
   pickerCanvas.addEventListener("click", (e) => {
     const rect = pickerCanvas.getBoundingClientRect();
     const hit = nearestCoprimeVertex(
       e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height
     );
-    if (hit) slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(hit.k, hit.p);
+    if (hit) {
+      lockedVertex = hit;
+      slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(hit.k, hit.p);
+      drawSturmianPicker();
+    }
   });
 
   new ResizeObserver(() => {
@@ -304,14 +342,32 @@
     setPanelWidth(nearest);
   }
 
+  let handlePid = null;
+
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
+    handlePid = e.pointerId;
     beginDrag(e.clientX);
   });
   handle.addEventListener("pointermove", (e) => moveDrag(e.clientX));
-  handle.addEventListener("pointerup", endDrag);
-  handle.addEventListener("pointercancel", endDrag);
+  handle.addEventListener("pointerup", () => {
+    if (handlePid !== null) {
+      try { handle.releasePointerCapture(handlePid); } catch (_) {}
+    }
+    endDrag();
+    handlePid = null;
+  });
+  handle.addEventListener("pointercancel", () => {
+    endDrag();
+    handlePid = null;
+  });
+  handle.addEventListener("lostpointercapture", () => {
+    dragging = false;
+    handlePid = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  });
 
   pg.addEventListener("transitionend", () => {
     pg.classList.remove("snapping");
@@ -484,6 +540,7 @@
   function setPickerGridSize(n) {
     currentGridN = n;
     hoveredVertex = null;
+    lockedVertex = null;
     drawSturmianPicker();
   }
 
@@ -496,7 +553,7 @@
     currentOffset = offsetSlider.displayValue;
     offsetSlider.onChange = (v) => {
       currentOffset = v;
-      if (hoveredVertex) drawSturmianPicker();
+      if (hoveredVertex || lockedVertex) drawSturmianPicker();
     };
   }
 
