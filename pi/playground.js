@@ -88,7 +88,7 @@
   const pickerCanvas = document.getElementById("picker_canvas");
   const pickerCtx = pickerCanvas.getContext("2d");
   const pickerTooltip = document.getElementById("picker_tooltip");
-  const pickerBox = document.getElementById("picker_box");
+  const slopeDisplay = document.getElementById("slope_display");
   let currentGridN = 20;
 
   function gcd(a, b) {
@@ -111,11 +111,11 @@
     const cellW = w / n;
     const cellH = h / n;
 
-    // Grid lines
+    // Grid lines at every cell boundary
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 0.5;
     pickerCtx.beginPath();
-    for (let i = 1; i < n; i++) {
+    for (let i = 0; i <= n; i++) {
       pickerCtx.moveTo(i * cellW, 0);
       pickerCtx.lineTo(i * cellW, h);
       pickerCtx.moveTo(0, i * cellH);
@@ -123,40 +123,58 @@
     }
     pickerCtx.stroke();
 
-    // Coprime circles — unfilled, gray border, diameter = cell size
+    // Coprime circles — unfilled, gray border, centered at grid vertices
     // Math convention: origin lower-left, p horizontal, k vertical up
+    // Vertex (p, k) → canvas (p * cellW, (n - k) * cellH)
     const r = Math.min(cellW, cellH) / 2;
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.35)";
     pickerCtx.lineWidth = 1;
-    for (let p = 0; p < n; p++) {
-      for (let k = 0; k < n; k++) {
+    for (let p = 0; p <= n; p++) {
+      for (let k = 0; k <= n; k++) {
         if (gcd(p, k) === 1) {
-          const cx = p * cellW + cellW / 2;
-          const cy = (n - 1 - k) * cellH + cellH / 2;
+          const vx = p * cellW;
+          const vy = (n - k) * cellH;
           pickerCtx.beginPath();
-          pickerCtx.arc(cx, cy, r, 0, 2 * Math.PI);
+          pickerCtx.arc(vx, vy, r, 0, 2 * Math.PI);
           pickerCtx.stroke();
         }
       }
     }
   }
 
+  // Find nearest coprime vertex to mouse position
+  function nearestCoprimeVertex(mouseX, mouseY, boxW, boxH) {
+    const n = currentGridN;
+    const cellW = boxW / n;
+    const cellH = boxH / n;
+    const r = Math.min(cellW, cellH) / 2;
+
+    const p = Math.round(mouseX / cellW);
+    const k = n - Math.round(mouseY / cellH);
+
+    if (p < 0 || p > n || k < 0 || k > n) return null;
+    if (gcd(p, k) !== 1) return null;
+
+    const vx = p * cellW;
+    const vy = (n - k) * cellH;
+    const dx = mouseX - vx;
+    const dy = mouseY - vy;
+    if (dx * dx + dy * dy > r * r) return null;
+
+    return { p, k, vx, vy };
+  }
+
   // Tooltip on hover — show k/p for coprime pairs
   pickerCanvas.addEventListener("mousemove", (e) => {
-    const n = currentGridN;
     const rect = pickerCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const cellW = rect.width / n;
-    const cellH = rect.height / n;
+    const hit = nearestCoprimeVertex(x, y, rect.width, rect.height);
 
-    const p = Math.floor(x / cellW);
-    const k = n - 1 - Math.floor(y / cellH);
-
-    if (p >= 0 && p < n && k >= 0 && k < n && gcd(p, k) === 1) {
-      pickerTooltip.textContent = k + "/" + p;
-      pickerTooltip.style.left = (p * cellW + cellW / 2) + "px";
-      pickerTooltip.style.top = ((n - 1 - k) * cellH + cellH / 2) + "px";
+    if (hit) {
+      pickerTooltip.textContent = hit.k + "/" + hit.p;
+      pickerTooltip.style.left = hit.vx + "px";
+      pickerTooltip.style.top = hit.vy + "px";
       pickerTooltip.style.opacity = "1";
     } else {
       pickerTooltip.style.opacity = "0";
@@ -165,6 +183,18 @@
 
   pickerCanvas.addEventListener("mouseleave", () => {
     pickerTooltip.style.opacity = "0";
+  });
+
+  // Click to set slope display
+  pickerCanvas.addEventListener("click", (e) => {
+    const rect = pickerCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const hit = nearestCoprimeVertex(x, y, rect.width, rect.height);
+
+    if (hit) {
+      slopeDisplay.textContent = "slope = " + hit.k + " / " + hit.p;
+    }
   });
 
   new ResizeObserver(drawSturmianPicker).observe(pickerCanvas);
