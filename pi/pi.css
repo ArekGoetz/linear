@@ -61,6 +61,8 @@ html, body {
   width: var(--panel-width);
   min-width: 0;
   background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: none;
   z-index: 2;
   display: flex;

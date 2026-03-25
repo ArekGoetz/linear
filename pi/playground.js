@@ -105,20 +105,50 @@
     return `<span class="vfrac"><span class="vfrac__num">${num}</span><span class="vfrac__den">${den}</span></span>`;
   }
 
+  // Closest fraction to x with denominator ≤ maxDen (Stern-Brocot mediants)
+  function close_frac(x, maxDen) {
+    if (maxDen < 1) return { num: Math.round(x), den: 1 };
+    const sign = x < 0 ? -1 : 1;
+    const ax = Math.abs(x);
+    // lower mediant a/b, upper mediant c/d
+    let a = Math.floor(ax), b = 1;
+    let c = a + 1, d = 1;
+    let bestNum = a, bestDen = 1, bestErr = Math.abs(ax - a);
+    if (Math.abs(ax - c) < bestErr) { bestNum = c; bestErr = Math.abs(ax - c); }
+    while (true) {
+      const mn = a + c, md = b + d;
+      if (md > maxDen) break;
+      const mv = mn / md;
+      const err = Math.abs(ax - mv);
+      if (err < bestErr) { bestErr = err; bestNum = mn; bestDen = md; }
+      if (err === 0) break;
+      if (mv < ax) { a = mn; b = md; }
+      else { c = mn; d = md; }
+    }
+    return { num: sign * bestNum, den: bestDen };
+  }
+
   // Compute Sturmian word: -1 = horizontal (blue), 1 = vertical (green)
-  // Rule: horizontal if staircase is on/above the line, vertical if below
+  // Rule: horizontal if staircase is on/above the line (incl. grid points), vertical if below
+  // Guards ensure exactly p horizontal and k vertical steps = period
   function computeSturmianWord(p, k, offset) {
     if (p === 0) return [];
+    const eps = 1e-9;
     const word = [];
     let x = 0, y = Math.floor(offset);
+    let hCount = 0, vCount = 0;
     for (let step = 0; step < p + k; step++) {
-      const lineY = (k / p) * x + offset;
-      if (y >= lineY) {
-        word.push(-1);
-        x++;
+      if (hCount >= p) {
+        word.push(1); y++; vCount++;
+      } else if (vCount >= k) {
+        word.push(-1); x++; hCount++;
       } else {
-        word.push(1);
-        y++;
+        const lineY = (k / p) * x + offset;
+        if (y >= lineY - eps) {
+          word.push(-1); x++; hCount++;
+        } else {
+          word.push(1); y++; vCount++;
+        }
       }
     }
     return word;
@@ -166,31 +196,37 @@
 
   function drawStaircase(p, k) {
     if (p === 0) return;
+    const eps = 1e-9;
     const n = currentGridN;
     const cellW = pickerCanvas.width / n;
     const cellH = pickerCanvas.height / n;
 
     let x = 0, y = Math.floor(currentOffset);
+    let hCount = 0, vCount = 0;
     for (let step = 0; step < p + k; step++) {
-      const lineY = (k / p) * x + currentOffset;
-      if (y >= lineY) {
-        // Horizontal: (x, y) → (x+1, y) — blue
+      let goH;
+      if (hCount >= p) goH = false;
+      else if (vCount >= k) goH = true;
+      else {
+        const lineY = (k / p) * x + currentOffset;
+        goH = (y >= lineY - eps);
+      }
+      if (goH) {
         pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.lineWidth = 3;
         pickerCtx.beginPath();
         pickerCtx.moveTo(x * cellW, (n - y) * cellH);
         pickerCtx.lineTo((x + 1) * cellW, (n - y) * cellH);
         pickerCtx.stroke();
-        x++;
+        x++; hCount++;
       } else {
-        // Vertical: (x, y) → (x, y+1) — green
         pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
         pickerCtx.lineWidth = 3;
         pickerCtx.beginPath();
         pickerCtx.moveTo(x * cellW, (n - y) * cellH);
         pickerCtx.lineTo(x * cellW, (n - y - 1) * cellH);
         pickerCtx.stroke();
-        y++;
+        y++; vCount++;
       }
     }
   }
@@ -567,10 +603,20 @@
   const length = sliders.sl_length;
   const offsetSlider = sliders.sl_offset;
 
+  function updateOffsetThumb() {
+    if (!offsetSlider) return;
+    const val = offsetSlider.displayValue;
+    const maxDen = cycle ? 2 * cycle.displayValue : 20;
+    const f = close_frac(val, maxDen);
+    offsetSlider._thumb.textContent =
+      f.den === 1 ? String(f.num) : f.num + "/" + f.den;
+  }
+
   if (offsetSlider) {
     currentOffset = offsetSlider.displayValue;
     offsetSlider.onChange = (v) => {
       currentOffset = v;
+      updateOffsetThumb();
       if (lockedVertex) {
         updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
       }
@@ -585,6 +631,7 @@
     drawUnityClock();
     lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
     updateSlopeAndWord(1, cycle.displayValue);
+    updateOffsetThumb();
     drawSturmianPicker();
 
     if (length) {
@@ -599,6 +646,7 @@
       drawUnityClock();
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
       updateSlopeAndWord(1, cycleVal);
+      updateOffsetThumb();
       drawSturmianPicker();
       if (length) {
         length.setMax(gs);
