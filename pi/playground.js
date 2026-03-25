@@ -37,7 +37,7 @@
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
     ctx.lineWidth = 1;
     for (let k = 0; k < n; k++) {
-      const angle = Math.PI + (2 * Math.PI * k) / n;
+      const angle = -(2 * Math.PI * k) / n;
       const fx = cx + (radius + labelFont) * Math.cos(angle);
       const fy = cy + (radius + labelFont) * Math.sin(angle);
       ctx.beginPath();
@@ -54,7 +54,7 @@
     ctx.stroke();
 
     // Labels at roots of unity — centered ON the circle
-    // 0 at west (angle = π), proceeding counterclockwise
+    // Standard complex analysis: 0 at east, proceeding counterclockwise
     ctx.font = `600 ${labelFont}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -62,7 +62,7 @@
     const labelPad = labelFont * 0.35;
 
     for (let k = 0; k < n; k++) {
-      const angle = Math.PI + (2 * Math.PI * k) / n;
+      const angle = -(2 * Math.PI * k) / n;
       const lx = cx + radius * Math.cos(angle);
       const ly = cy + radius * Math.sin(angle);
 
@@ -110,11 +110,12 @@
     const cellH = h / n;
 
     // Shade coprime pairs (p, k) light gray
+    // Math convention: origin lower-left, p horizontal, k vertical up
     pickerCtx.fillStyle = "rgba(255, 255, 255, 0.20)";
     for (let p = 0; p < n; p++) {
       for (let k = 0; k < n; k++) {
         if (gcd(p, k) === 1) {
-          pickerCtx.fillRect(k * cellW, p * cellH, cellW, cellH);
+          pickerCtx.fillRect(p * cellW, (n - 1 - k) * cellH, cellW, cellH);
         }
       }
     }
