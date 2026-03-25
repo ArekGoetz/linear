@@ -9,7 +9,7 @@
 
 :root {
   --bg: #111113;
-  --surface: rgba(42, 42, 48, 0.75);
+  --surface: rgba(42, 42, 48, 0.80);
   --text: rgb(248, 248, 248);
   --text-dim: rgb(220, 220, 220);
   --handle-dot: rgba(255, 255, 255, 0.35);
@@ -156,6 +156,23 @@ html, body {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+#picker_tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  padding: 0.2em 0.5em;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111113;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.12s;
+  transform: translate(-50%, -110%);
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
