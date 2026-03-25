@@ -246,7 +246,7 @@ html, body {
 /* Enlarge thumb on hover or when slider has keyboard focus */
 .pi-slider__thumb:hover,
 .pi-slider:focus-visible .pi-slider__thumb {
-  transform: translate(-50%, -50%) scale(1.5);
+  transform: translate(-50%, -50%) scale(1.25);
 }
 
 /* Thumb color driven by CSS attribute selectors — JS only sets data-parity */

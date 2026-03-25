@@ -25,27 +25,46 @@
     const radius = Math.min(w, h) * 0.32;
     const labelFont = Math.max(10, Math.min(16, radius / n * 2.5));
 
-    // Draw circle
+    // Real axis — thin gray horizontal line spanning full canvas width
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(w, cy);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Fan lines from center to each root (drawn before labels so behind)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
+    ctx.lineWidth = 1;
+    for (let k = 0; k < n; k++) {
+      const angle = Math.PI + (2 * Math.PI * k) / n;
+      const fx = cx + (radius + labelFont) * Math.cos(angle);
+      const fy = cy + (radius + labelFont) * Math.sin(angle);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+    }
+
+    // Circle
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Draw labels at roots of unity positions
+    // Labels at roots of unity — centered ON the circle
+    // 0 at west (angle = π), proceeding counterclockwise
     ctx.font = `600 ${labelFont}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     const labelPad = labelFont * 0.35;
-    const labelRadius = radius + labelFont * 0.9;
 
     for (let k = 0; k < n; k++) {
-      // Standard roots of unity: angle = 2πk/n, starting at right (3 o'clock)
-      // But place 0 at top (12 o'clock) for clock convention: offset by -π/2
-      const angle = (2 * Math.PI * k) / n - Math.PI / 2;
-      const lx = cx + labelRadius * Math.cos(angle);
-      const ly = cy + labelRadius * Math.sin(angle);
+      const angle = Math.PI + (2 * Math.PI * k) / n;
+      const lx = cx + radius * Math.cos(angle);
+      const ly = cy + radius * Math.sin(angle);
 
       const text = String(k);
       const metrics = ctx.measureText(text);
