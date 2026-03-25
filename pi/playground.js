@@ -89,11 +89,12 @@
   const pickerCtx = pickerCanvas.getContext("2d");
   const pickerTooltip = document.getElementById("picker_tooltip");
   const slopeDisplay = document.getElementById("slope_display");
+  const wordDisplay = document.getElementById("word_display");
   const inputPanel = document.getElementById("input_panel");
   let currentGridN = 20;
   let hoveredVertex = null;
-  let lockedVertex = null;  // persists after click
-  let currentOffset = 0; // kept in sync by offset slider onChange
+  let lockedVertex = null;
+  let currentOffset = 0;
 
   function gcd(a, b) {
     while (b) { const t = b; b = a % b; a = t; }
@@ -102,6 +103,37 @@
 
   function fracHTML(num, den) {
     return `<span class="vfrac"><span class="vfrac__num">${num}</span><span class="vfrac__den">${den}</span></span>`;
+  }
+
+  // Compute Sturmian word: -1 = horizontal (blue), 1 = vertical (green)
+  // Rule: horizontal if staircase is on/above the line, vertical if below
+  function computeSturmianWord(p, k, offset) {
+    if (p === 0) return [];
+    const word = [];
+    let x = 0, y = Math.floor(offset);
+    for (let step = 0; step < p + k; step++) {
+      const lineY = (k / p) * x + offset;
+      if (y >= lineY) {
+        word.push(-1);
+        x++;
+      } else {
+        word.push(1);
+        y++;
+      }
+    }
+    return word;
+  }
+
+  function updateSlopeAndWord(k, p) {
+    slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(k, p) +
+      '<span style="margin-left:1em">period\u00a0=\u00a0' + (k + p) + '</span>';
+    if (p === 0) { wordDisplay.innerHTML = ""; return; }
+    const word = computeSturmianWord(p, k, currentOffset);
+    wordDisplay.innerHTML = word.map(v =>
+      v === -1
+        ? '<span class="word-h">\u22121</span>'
+        : '<span class="word-v">1</span>'
+    ).join('\u2009');
   }
 
   function drawSturmianLine(p, k) {
@@ -122,7 +154,6 @@
       return;
     }
 
-    // Line from (0, offset) to (p, k + offset) in math coords
     const cx0 = 0;
     const cy0 = (n - currentOffset) * cellH;
     const cx1 = p * cellW;
@@ -138,30 +169,36 @@
     const n = currentGridN;
     const cellW = pickerCanvas.width / n;
     const cellH = pickerCanvas.height / n;
-    const alpha = k / p;
 
-    for (let x = 0; x < p; x++) {
-      const yCur  = Math.floor(alpha * x + currentOffset);
-      const yNext = Math.floor(alpha * (x + 1) + currentOffset);
-
-      // Horizontal segment: (x, yCur) → (x+1, yCur) — blue
-      pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
-      pickerCtx.lineWidth = 1.5;
-      pickerCtx.beginPath();
-      pickerCtx.moveTo(x * cellW, (n - yCur) * cellH);
-      pickerCtx.lineTo((x + 1) * cellW, (n - yCur) * cellH);
-      pickerCtx.stroke();
-
-      // Vertical segment: (x+1, yCur) → (x+1, yNext) — green
-      if (yNext !== yCur) {
-        pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
-        pickerCtx.lineWidth = 1.5;
+    let x = 0, y = Math.floor(currentOffset);
+    for (let step = 0; step < p + k; step++) {
+      const lineY = (k / p) * x + currentOffset;
+      if (y >= lineY) {
+        // Horizontal: (x, y) → (x+1, y) — blue
+        pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
+        pickerCtx.lineWidth = 3;
         pickerCtx.beginPath();
-        pickerCtx.moveTo((x + 1) * cellW, (n - yCur) * cellH);
-        pickerCtx.lineTo((x + 1) * cellW, (n - yNext) * cellH);
+        pickerCtx.moveTo(x * cellW, (n - y) * cellH);
+        pickerCtx.lineTo((x + 1) * cellW, (n - y) * cellH);
         pickerCtx.stroke();
+        x++;
+      } else {
+        // Vertical: (x, y) → (x, y+1) — green
+        pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
+        pickerCtx.lineWidth = 3;
+        pickerCtx.beginPath();
+        pickerCtx.moveTo(x * cellW, (n - y) * cellH);
+        pickerCtx.lineTo(x * cellW, (n - y - 1) * cellH);
+        pickerCtx.stroke();
+        y++;
       }
     }
+  }
+
+  function drawOverlay(v) {
+    // Staircase first (behind), then line on top
+    drawStaircase(v.p, v.k);
+    drawSturmianLine(v.p, v.k);
   }
 
   function drawSturmianPicker() {
@@ -190,7 +227,7 @@
     }
     pickerCtx.stroke();
 
-    // Coprime circles at grid vertices — same shade as grid lines
+    // Coprime circles at grid vertices
     const r = Math.min(cellW, cellH) / 2;
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 1;
@@ -204,16 +241,12 @@
       }
     }
 
-    // Locked line + staircase (persistent after click)
-    if (lockedVertex) {
-      drawSturmianLine(lockedVertex.p, lockedVertex.k);
-      drawStaircase(lockedVertex.p, lockedVertex.k);
-    }
-    // Hovered line + staircase (temporary, skip if same as locked)
+    // Locked overlay (persistent)
+    if (lockedVertex) drawOverlay(lockedVertex);
+    // Hovered overlay (temporary, skip if same as locked)
     if (hoveredVertex && (!lockedVertex ||
         hoveredVertex.p !== lockedVertex.p || hoveredVertex.k !== lockedVertex.k)) {
-      drawSturmianLine(hoveredVertex.p, hoveredVertex.k);
-      drawStaircase(hoveredVertex.p, hoveredVertex.k);
+      drawOverlay(hoveredVertex);
     }
   }
 
@@ -234,6 +267,7 @@
     return { p, k, vx, vy };
   }
 
+  // Hover: draw line/staircase on canvas + tooltip, but NO slope/word text update
   pickerCanvas.addEventListener("mousemove", (e) => {
     const rect = pickerCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -245,40 +279,24 @@
 
     if (hit) {
       hoveredVertex = hit;
-      if (hit.p !== prevP || hit.k !== prevK) {
-        drawSturmianPicker();
-        slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(hit.k, hit.p);
-      }
+      if (hit.p !== prevP || hit.k !== prevK) drawSturmianPicker();
       pickerTooltip.style.fontSize = getComputedStyle(inputPanel).fontSize;
       pickerTooltip.innerHTML = fracHTML(hit.k, hit.p);
       pickerTooltip.style.left = (rect.left + hit.vx) + "px";
       pickerTooltip.style.top  = (rect.top  + hit.vy) + "px";
       pickerTooltip.style.opacity = "1";
     } else {
-      if (hoveredVertex) {
-        hoveredVertex = null;
-        drawSturmianPicker();
-        // Revert slope to locked vertex or default
-        if (lockedVertex) {
-          slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(lockedVertex.k, lockedVertex.p);
-        }
-      }
+      if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
       pickerTooltip.style.opacity = "0";
     }
   });
 
   pickerCanvas.addEventListener("mouseleave", () => {
-    if (hoveredVertex) {
-      hoveredVertex = null;
-      drawSturmianPicker();
-      if (lockedVertex) {
-        slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(lockedVertex.k, lockedVertex.p);
-      }
-    }
+    if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
     pickerTooltip.style.opacity = "0";
   });
 
-  // Click locks the line + staircase persistently
+  // Click: lock line/staircase + update slope, period, and word
   pickerCanvas.addEventListener("click", (e) => {
     const rect = pickerCanvas.getBoundingClientRect();
     const hit = nearestCoprimeVertex(
@@ -286,7 +304,7 @@
     );
     if (hit) {
       lockedVertex = hit;
-      slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(hit.k, hit.p);
+      updateSlopeAndWord(hit.k, hit.p);
       drawSturmianPicker();
     }
   });
@@ -553,6 +571,9 @@
     currentOffset = offsetSlider.displayValue;
     offsetSlider.onChange = (v) => {
       currentOffset = v;
+      if (lockedVertex) {
+        updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
+      }
       if (hoveredVertex || lockedVertex) drawSturmianPicker();
     };
   }
@@ -562,7 +583,9 @@
     currentCycleForClock = cycle.displayValue;
     setPickerGridSize(gridSize);
     drawUnityClock();
-    slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(1, cycle.displayValue);
+    lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
+    updateSlopeAndWord(1, cycle.displayValue);
+    drawSturmianPicker();
 
     if (length) {
       length.setMax(gridSize);
@@ -574,6 +597,9 @@
       currentCycleForClock = cycleVal;
       setPickerGridSize(gs);
       drawUnityClock();
+      lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
+      updateSlopeAndWord(1, cycleVal);
+      drawSturmianPicker();
       if (length) {
         length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));
