@@ -166,13 +166,29 @@ html, body {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.92);
   color: #111113;
-  font-size: 12px;
+  font-size: inherit;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.12s;
   transform: translate(-50%, -110%);
+}
+
+.sturmian-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+}
+
+.slope-display {
+  font-size: 0.75em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
