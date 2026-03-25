@@ -5,16 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Pi — Button</title>
   <link rel="stylesheet" href="pi.css">
+  <script>
+  MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']] },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea'] }
+  };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 </head>
 <body>
 
   <div id="playground">
     <canvas id="canvas"></canvas>
 
-    <div id="resize_handle"></div>
+    <div id="left_handle" class="resize-handle resize-handle--left"></div>
+
+    <div id="left_panel" class="side-panel side-panel--left">
+      <div class="panel-label">Formula</div>
+      <div id="formula_display" class="formula-display"></div>
+    </div>
+
+    <div id="right_handle" class="resize-handle resize-handle--right"></div>
     <div id="picker_tooltip"></div>
 
-    <div id="input_panel">
+    <div id="right_panel" class="side-panel side-panel--right">
 
       <div class="pi-slider" id="sl_cycle" data-min="2" data-max="32" data-step="1" data-scale="quadratic" data-value="10" tabindex="0" role="slider" aria-valuemin="2" aria-valuemax="32">
         <div class="pi-slider__label">cycle</div>
