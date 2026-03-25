@@ -89,11 +89,70 @@
   const pickerCtx = pickerCanvas.getContext("2d");
   const pickerTooltip = document.getElementById("picker_tooltip");
   const slopeDisplay = document.getElementById("slope_display");
+  const inputPanel = document.getElementById("input_panel");
   let currentGridN = 20;
+  let hoveredVertex = null;
+  let currentOffset = 0; // kept in sync by offset slider onChange
 
   function gcd(a, b) {
     while (b) { const t = b; b = a % b; a = t; }
     return a;
+  }
+
+  function fracHTML(num, den) {
+    return `<span class="vfrac"><span class="vfrac__num">${num}</span><span class="vfrac__den">${den}</span></span>`;
+  }
+
+  // Clip line y = s*x + b to canvas rectangle [0,w] x [0,h]
+  function clipLine(s, b, w, h) {
+    const pts = [];
+    const add = (x, y) => {
+      if (x >= -0.5 && x <= w + 0.5 && y >= -0.5 && y <= h + 0.5) {
+        const cx = Math.max(0, Math.min(w, x));
+        const cy = Math.max(0, Math.min(h, y));
+        if (!pts.some(p => Math.abs(p[0] - cx) < 0.5 && Math.abs(p[1] - cy) < 0.5))
+          pts.push([cx, cy]);
+      }
+    };
+    add(0, b);
+    add(w, s * w + b);
+    if (Math.abs(s) > 1e-9) {
+      add(-b / s, 0);
+      add((h - b) / s, h);
+    }
+    return pts.slice(0, 2);
+  }
+
+  function drawSturmianLine(p, k) {
+    const n = currentGridN;
+    const w = pickerCanvas.width;
+    const h = pickerCanvas.height;
+    const cellW = w / n;
+    const cellH = h / n;
+
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+    pickerCtx.lineWidth = 1;
+
+    if (p === 0) {
+      // Vertical line at x = 0 (left border)
+      pickerCtx.beginPath();
+      pickerCtx.moveTo(0, 0);
+      pickerCtx.lineTo(0, h);
+      pickerCtx.stroke();
+      return;
+    }
+
+    // Math: y_math = (k/p)*x_math + currentOffset
+    // Canvas: canvas_x = x_math*cellW, canvas_y = (n - y_math)*cellH
+    // => canvas_y = h - (k/p)*(h/w)*canvas_x - currentOffset*cellH
+    const s = -(k / p) * (cellH / cellW);
+    const b = h - currentOffset * cellH;
+    const pts = clipLine(s, b, w, h);
+    if (pts.length < 2) return;
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(pts[0][0], pts[0][1]);
+    pickerCtx.lineTo(pts[1][0], pts[1][1]);
+    pickerCtx.stroke();
   }
 
   function drawSturmianPicker() {
@@ -104,14 +163,13 @@
     pickerCanvas.width = w;
     pickerCanvas.height = h;
 
-    // Background
     pickerCtx.fillStyle = "#46464e";
     pickerCtx.fillRect(0, 0, w, h);
 
     const cellW = w / n;
     const cellH = h / n;
 
-    // Grid lines at every cell boundary
+    // Grid lines
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 0.5;
     pickerCtx.beginPath();
@@ -123,81 +181,82 @@
     }
     pickerCtx.stroke();
 
-    // Coprime circles — unfilled, gray border, centered at grid vertices
-    // Math convention: origin lower-left, p horizontal, k vertical up
-    // Vertex (p, k) → canvas (p * cellW, (n - k) * cellH)
+    // Coprime circles at grid vertices — same shade as grid lines
     const r = Math.min(cellW, cellH) / 2;
-    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 1;
     for (let p = 0; p <= n; p++) {
       for (let k = 0; k <= n; k++) {
         if (gcd(p, k) === 1) {
-          const vx = p * cellW;
-          const vy = (n - k) * cellH;
           pickerCtx.beginPath();
-          pickerCtx.arc(vx, vy, r, 0, 2 * Math.PI);
+          pickerCtx.arc(p * cellW, (n - k) * cellH, r, 0, 2 * Math.PI);
           pickerCtx.stroke();
         }
       }
     }
+
+    // Dynamic Sturmian line when hovering a vertex
+    if (hoveredVertex) drawSturmianLine(hoveredVertex.p, hoveredVertex.k);
   }
 
-  // Find nearest coprime vertex to mouse position
   function nearestCoprimeVertex(mouseX, mouseY, boxW, boxH) {
     const n = currentGridN;
     const cellW = boxW / n;
     const cellH = boxH / n;
     const r = Math.min(cellW, cellH) / 2;
-
     const p = Math.round(mouseX / cellW);
     const k = n - Math.round(mouseY / cellH);
-
     if (p < 0 || p > n || k < 0 || k > n) return null;
     if (gcd(p, k) !== 1) return null;
-
     const vx = p * cellW;
     const vy = (n - k) * cellH;
     const dx = mouseX - vx;
     const dy = mouseY - vy;
     if (dx * dx + dy * dy > r * r) return null;
-
     return { p, k, vx, vy };
   }
 
-  // Tooltip on hover — show k/p for coprime pairs
   pickerCanvas.addEventListener("mousemove", (e) => {
     const rect = pickerCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const hit = nearestCoprimeVertex(x, y, rect.width, rect.height);
 
+    const prevP = hoveredVertex ? hoveredVertex.p : -1;
+    const prevK = hoveredVertex ? hoveredVertex.k : -1;
+
     if (hit) {
-      pickerTooltip.textContent = hit.k + "/" + hit.p;
-      pickerTooltip.style.left = hit.vx + "px";
-      pickerTooltip.style.top = hit.vy + "px";
+      hoveredVertex = hit;
+      if (hit.p !== prevP || hit.k !== prevK) drawSturmianPicker();
+      // Tooltip: fixed position in viewport, font from panel
+      pickerTooltip.style.fontSize = getComputedStyle(inputPanel).fontSize;
+      pickerTooltip.innerHTML = fracHTML(hit.k, hit.p);
+      pickerTooltip.style.left = (rect.left + hit.vx) + "px";
+      pickerTooltip.style.top  = (rect.top  + hit.vy) + "px";
       pickerTooltip.style.opacity = "1";
     } else {
+      if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
       pickerTooltip.style.opacity = "0";
     }
   });
 
   pickerCanvas.addEventListener("mouseleave", () => {
+    if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
     pickerTooltip.style.opacity = "0";
   });
 
-  // Click to set slope display
   pickerCanvas.addEventListener("click", (e) => {
     const rect = pickerCanvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const hit = nearestCoprimeVertex(x, y, rect.width, rect.height);
-
-    if (hit) {
-      slopeDisplay.textContent = "slope = " + hit.k + " / " + hit.p;
-    }
+    const hit = nearestCoprimeVertex(
+      e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height
+    );
+    if (hit) slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(hit.k, hit.p);
   });
 
-  new ResizeObserver(drawSturmianPicker).observe(pickerCanvas);
+  new ResizeObserver(() => {
+    hoveredVertex = null;
+    drawSturmianPicker();
+  }).observe(pickerCanvas);
 
   /* ── Panel resize ──────────────────────────────────── */
   const panel = document.getElementById("input_panel");
@@ -424,18 +483,29 @@
 
   function setPickerGridSize(n) {
     currentGridN = n;
+    hoveredVertex = null;
     drawSturmianPicker();
   }
 
   // Wire cycle → length + picker grid
   const cycle = sliders.sl_cycle;
   const length = sliders.sl_length;
+  const offsetSlider = sliders.sl_offset;
+
+  if (offsetSlider) {
+    currentOffset = offsetSlider.displayValue;
+    offsetSlider.onChange = (v) => {
+      currentOffset = v;
+      if (hoveredVertex) drawSturmianPicker();
+    };
+  }
 
   if (cycle) {
     const gridSize = 2 * cycle.displayValue;
     currentCycleForClock = cycle.displayValue;
     setPickerGridSize(gridSize);
     drawUnityClock();
+    slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(1, cycle.displayValue);
 
     if (length) {
       length.setMax(gridSize);

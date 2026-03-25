@@ -159,20 +159,34 @@ html, body {
 }
 
 #picker_tooltip {
-  position: absolute;
+  position: fixed;
   pointer-events: none;
-  z-index: 20;
-  padding: 0.2em 0.5em;
+  z-index: 9999;
+  padding: 0.25em 0.5em;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.92);
   color: #111113;
-  font-size: inherit;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.12s;
-  transform: translate(-50%, -110%);
+  transform: translate(-50%, -120%);
+}
+
+.vfrac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 1;
+}
+.vfrac__num {
+  border-bottom: 1px solid currentColor;
+  padding: 0 0.2em 0.05em;
+}
+.vfrac__den {
+  padding: 0.05em 0.2em 0;
 }
 
 .sturmian-group {
