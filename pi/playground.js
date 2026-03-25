@@ -137,8 +137,10 @@
     const eps = 1e-9;
     const crossings = [];
 
-    // Vertical grid crossings at x = 1, ..., p → blue
-    for (let i = 1; i <= p; i++) {
+    // Vertical grid crossings at x = 0, ..., p-1 → blue
+    // x=0 captures the y-axis segment; x=p-1 is the last interior vertical.
+    // The endpoint (p, k+offset) is captured by the horizontal right-closed convention.
+    for (let i = 0; i < p; i++) {
       const t = i / p;
       const yc = (k / p) * i + offset;
       // Lower-closed: if yc is integer, segment starts at yc
