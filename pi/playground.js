@@ -87,6 +87,8 @@
   /* ── Sturmian Picker (coprimality) ────────────────── */
   const pickerCanvas = document.getElementById("picker_canvas");
   const pickerCtx = pickerCanvas.getContext("2d");
+  const pickerTooltip = document.getElementById("picker_tooltip");
+  const pickerBox = document.getElementById("picker_box");
   let currentGridN = 20;
 
   function gcd(a, b) {
@@ -109,17 +111,6 @@
     const cellW = w / n;
     const cellH = h / n;
 
-    // Shade coprime pairs (p, k) light gray
-    // Math convention: origin lower-left, p horizontal, k vertical up
-    pickerCtx.fillStyle = "rgba(255, 255, 255, 0.20)";
-    for (let p = 0; p < n; p++) {
-      for (let k = 0; k < n; k++) {
-        if (gcd(p, k) === 1) {
-          pickerCtx.fillRect(p * cellW, (n - 1 - k) * cellH, cellW, cellH);
-        }
-      }
-    }
-
     // Grid lines
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 0.5;
@@ -131,7 +122,50 @@
       pickerCtx.lineTo(w, i * cellH);
     }
     pickerCtx.stroke();
+
+    // Coprime circles — unfilled, gray border, diameter = cell size
+    // Math convention: origin lower-left, p horizontal, k vertical up
+    const r = Math.min(cellW, cellH) / 2;
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    pickerCtx.lineWidth = 1;
+    for (let p = 0; p < n; p++) {
+      for (let k = 0; k < n; k++) {
+        if (gcd(p, k) === 1) {
+          const cx = p * cellW + cellW / 2;
+          const cy = (n - 1 - k) * cellH + cellH / 2;
+          pickerCtx.beginPath();
+          pickerCtx.arc(cx, cy, r, 0, 2 * Math.PI);
+          pickerCtx.stroke();
+        }
+      }
+    }
   }
+
+  // Tooltip on hover — show k/p for coprime pairs
+  pickerCanvas.addEventListener("mousemove", (e) => {
+    const n = currentGridN;
+    const rect = pickerCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const cellW = rect.width / n;
+    const cellH = rect.height / n;
+
+    const p = Math.floor(x / cellW);
+    const k = n - 1 - Math.floor(y / cellH);
+
+    if (p >= 0 && p < n && k >= 0 && k < n && gcd(p, k) === 1) {
+      pickerTooltip.textContent = k + "/" + p;
+      pickerTooltip.style.left = (p * cellW + cellW / 2) + "px";
+      pickerTooltip.style.top = ((n - 1 - k) * cellH + cellH / 2) + "px";
+      pickerTooltip.style.opacity = "1";
+    } else {
+      pickerTooltip.style.opacity = "0";
+    }
+  });
+
+  pickerCanvas.addEventListener("mouseleave", () => {
+    pickerTooltip.style.opacity = "0";
+  });
 
   new ResizeObserver(drawSturmianPicker).observe(pickerCanvas);
 
