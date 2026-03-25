@@ -37,7 +37,7 @@
     ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
     ctx.lineWidth = 1;
     for (let k = 0; k < n; k++) {
-      const angle = Math.PI + (2 * Math.PI * k) / n;
+      const angle = Math.PI - (2 * Math.PI * k) / n;
       const fx = cx + (radius + labelFont) * Math.cos(angle);
       const fy = cy + (radius + labelFont) * Math.sin(angle);
       ctx.beginPath();
@@ -62,7 +62,7 @@
     const labelPad = labelFont * 0.35;
 
     for (let k = 0; k < n; k++) {
-      const angle = Math.PI + (2 * Math.PI * k) / n;
+      const angle = Math.PI - (2 * Math.PI * k) / n;
       const lx = cx + radius * Math.cos(angle);
       const ly = cy + radius * Math.sin(angle);
 
