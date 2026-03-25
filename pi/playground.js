@@ -29,15 +29,15 @@
     ctx.beginPath();
     ctx.moveTo(0, cy);
     ctx.lineTo(w, cy);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
     ctx.lineWidth = 1;
     ctx.stroke();
 
     // Fan lines from center to each root (drawn before labels so behind)
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
     ctx.lineWidth = 1;
     for (let k = 0; k < n; k++) {
-      const angle = Math.PI - (2 * Math.PI * k) / n;
+      const angle = Math.PI + (2 * Math.PI * k) / n;
       const fx = cx + (radius + labelFont) * Math.cos(angle);
       const fy = cy + (radius + labelFont) * Math.sin(angle);
       ctx.beginPath();
@@ -49,7 +49,7 @@
     // Circle
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.30)";
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -62,7 +62,7 @@
     const labelPad = labelFont * 0.35;
 
     for (let k = 0; k < n; k++) {
-      const angle = Math.PI - (2 * Math.PI * k) / n;
+      const angle = Math.PI + (2 * Math.PI * k) / n;
       const lx = cx + radius * Math.cos(angle);
       const ly = cy + radius * Math.sin(angle);
 
@@ -83,6 +83,56 @@
       ctx.fillText(text, lx, ly);
     }
   }
+
+  /* ── Sturmian Picker (coprimality) ────────────────── */
+  const pickerCanvas = document.getElementById("picker_canvas");
+  const pickerCtx = pickerCanvas.getContext("2d");
+  let currentGridN = 20;
+
+  function gcd(a, b) {
+    while (b) { const t = b; b = a % b; a = t; }
+    return a;
+  }
+
+  function drawSturmianPicker() {
+    const n = currentGridN;
+    const w = pickerCanvas.clientWidth;
+    const h = pickerCanvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    pickerCanvas.width = w;
+    pickerCanvas.height = h;
+
+    // Background
+    pickerCtx.fillStyle = "#46464e";
+    pickerCtx.fillRect(0, 0, w, h);
+
+    const cellW = w / n;
+    const cellH = h / n;
+
+    // Shade coprime pairs (p, k) light gray
+    pickerCtx.fillStyle = "rgba(255, 255, 255, 0.20)";
+    for (let p = 0; p < n; p++) {
+      for (let k = 0; k < n; k++) {
+        if (gcd(p, k) === 1) {
+          pickerCtx.fillRect(k * cellW, p * cellH, cellW, cellH);
+        }
+      }
+    }
+
+    // Grid lines
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+    pickerCtx.lineWidth = 0.5;
+    pickerCtx.beginPath();
+    for (let i = 1; i < n; i++) {
+      pickerCtx.moveTo(i * cellW, 0);
+      pickerCtx.lineTo(i * cellW, h);
+      pickerCtx.moveTo(0, i * cellH);
+      pickerCtx.lineTo(w, i * cellH);
+    }
+    pickerCtx.stroke();
+  }
+
+  new ResizeObserver(drawSturmianPicker).observe(pickerCanvas);
 
   /* ── Panel resize ──────────────────────────────────── */
   const panel = document.getElementById("input_panel");
@@ -307,11 +357,9 @@
     if (el.id) sliders[el.id] = s;
   });
 
-  // Picker grid — CSS-only via --grid-n custom property
-  const pickerBox = document.getElementById("picker_box");
-
   function setPickerGridSize(n) {
-    if (pickerBox) pickerBox.style.setProperty("--grid-n", n);
+    currentGridN = n;
+    drawSturmianPicker();
   }
 
   // Wire cycle → length + picker grid
