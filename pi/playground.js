@@ -90,7 +90,7 @@
   const pickerTooltip = document.getElementById("picker_tooltip");
   const slopeDisplay = document.getElementById("slope_display");
   const wordDisplay = document.getElementById("word_display");
-  const inputPanel = document.getElementById("input_panel");
+  const rightPanel = document.getElementById("right_panel");
   let currentGridN = 20;
   let hoveredVertex = null;
   let lockedVertex = null;
@@ -325,7 +325,7 @@
     if (hit) {
       hoveredVertex = hit;
       if (hit.p !== prevP || hit.k !== prevK) drawSturmianPicker();
-      pickerTooltip.style.fontSize = getComputedStyle(inputPanel).fontSize;
+      pickerTooltip.style.fontSize = getComputedStyle(rightPanel).fontSize;
       pickerTooltip.innerHTML = fracHTML(hit.k, hit.p);
       pickerTooltip.style.left = (rect.left + hit.vx) + "px";
       pickerTooltip.style.top  = (rect.top  + hit.vy) + "px";
@@ -359,82 +359,130 @@
     drawSturmianPicker();
   }).observe(pickerCanvas);
 
-  /* ── Panel resize ──────────────────────────────────── */
-  const panel = document.getElementById("input_panel");
-  const handle = document.getElementById("resize_handle");
+  /* ── Panel resize (generic for both sides) ──────── */
   const pg = document.getElementById("playground");
   const snaps = [1, 120, 180, 240, 360, 480];
 
-  let dragging = false;
-  let startX, startW;
-
-  function setPanelWidth(w) {
-    pg.style.setProperty("--panel-width", w + "px");
+  function maxPanelWidth() {
+    return Math.floor(window.innerWidth / 3);
   }
 
-  function beginDrag(x) {
-    dragging = true;
-    startX = x;
-    startW = panel.offsetWidth;
-    pg.classList.remove("snapping");
-    document.body.style.cursor = "ew-resize";
-    document.body.style.userSelect = "none";
-  }
+  function setupPanelResize(handleEl, panelEl, cssVar, direction) {
+    // direction: 'right' = panel on right (drag left to widen)
+    //            'left'  = panel on left  (drag right to widen)
+    let dragging = false;
+    let startX, startW, pid = null;
 
-  const maxSnap = Math.max(...snaps);
-
-  function moveDrag(x) {
-    if (!dragging) return;
-    const delta = startX - x;
-    const w = Math.max(0, Math.min(startW + delta, maxSnap));
-    setPanelWidth(w);
-  }
-
-  function endDrag() {
-    if (!dragging) return;
-    dragging = false;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-
-    const cur = panel.offsetWidth;
-    const nearest = snaps.reduce((a, b) =>
-      Math.abs(b - cur) < Math.abs(a - cur) ? b : a
-    );
-
-    pg.classList.add("snapping");
-    setPanelWidth(nearest);
-  }
-
-  let handlePid = null;
-
-  handle.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    handlePid = e.pointerId;
-    beginDrag(e.clientX);
-  });
-  handle.addEventListener("pointermove", (e) => moveDrag(e.clientX));
-  handle.addEventListener("pointerup", () => {
-    if (handlePid !== null) {
-      try { handle.releasePointerCapture(handlePid); } catch (_) {}
+    function setWidth(w) {
+      pg.style.setProperty(cssVar, w + "px");
     }
-    endDrag();
-    handlePid = null;
-  });
-  handle.addEventListener("pointercancel", () => {
-    endDrag();
-    handlePid = null;
-  });
-  handle.addEventListener("lostpointercapture", () => {
-    dragging = false;
-    handlePid = null;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  });
+
+    function beginDrag(x) {
+      dragging = true;
+      startX = x;
+      startW = panelEl.offsetWidth;
+      pg.classList.remove("snapping");
+      document.body.style.cursor = "ew-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    function moveDrag(x) {
+      if (!dragging) return;
+      const delta = direction === "right" ? startX - x : x - startX;
+      const maxW = maxPanelWidth();
+      const w = Math.max(0, Math.min(startW + delta, maxW));
+      setWidth(w);
+    }
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+
+      const cur = panelEl.offsetWidth;
+      const maxW = maxPanelWidth();
+      const validSnaps = snaps.filter(s => s <= maxW);
+      const nearest = validSnaps.reduce((a, b) =>
+        Math.abs(b - cur) < Math.abs(a - cur) ? b : a
+      );
+
+      pg.classList.add("snapping");
+      setWidth(nearest);
+    }
+
+    handleEl.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      handleEl.setPointerCapture(e.pointerId);
+      pid = e.pointerId;
+      beginDrag(e.clientX);
+    });
+    handleEl.addEventListener("pointermove", (e) => moveDrag(e.clientX));
+    handleEl.addEventListener("pointerup", () => {
+      if (pid !== null) {
+        try { handleEl.releasePointerCapture(pid); } catch (_) {}
+      }
+      endDrag();
+      pid = null;
+    });
+    handleEl.addEventListener("pointercancel", () => {
+      endDrag();
+      pid = null;
+    });
+    handleEl.addEventListener("lostpointercapture", () => {
+      dragging = false;
+      pid = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    });
+  }
+
+  // Right panel resize
+  setupPanelResize(
+    document.getElementById("right_handle"),
+    document.getElementById("right_panel"),
+    "--right-panel-width",
+    "right"
+  );
+
+  // Left panel resize
+  setupPanelResize(
+    document.getElementById("left_handle"),
+    document.getElementById("left_panel"),
+    "--left-panel-width",
+    "left"
+  );
 
   pg.addEventListener("transitionend", () => {
     pg.classList.remove("snapping");
   });
+
+  /* ── MathJax formula (left panel) ───────────────── */
+  const formulaDisplay = document.getElementById("formula_display");
+
+  function updateFormula(cycleVal, lengthVal) {
+    if (!formulaDisplay) return;
+    const n = cycleVal || 10;
+    const L = lengthVal || 1;
+    const g = gcd(2, n);
+    const a = 2 / g;
+    const b = n / g;
+    let exp;
+    if (b === 1 && a === 1) exp = "\\pi i";
+    else if (b === 1) exp = a + "\\pi i";
+    else if (a === 1) exp = "\\frac{\\pi i}{" + b + "}";
+    else exp = "\\frac{" + a + "\\pi i}{" + b + "}";
+
+    const upper = L - 1;
+    const tex = "\\displaystyle\\sum_{j=0}^{" + upper + "} \\epsilon_j \\, e^{-" + exp + "}";
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      MathJax.typesetClear([formulaDisplay]);
+      formulaDisplay.innerHTML = "\\(" + tex + "\\)";
+      MathJax.typesetPromise([formulaDisplay]);
+    } else {
+      formulaDisplay.innerHTML = "\\(" + tex + "\\)";
+    }
+  }
 
   /* ── PiSlider (v2 — no DOM generation, CSS grid) ──── */
   /*
@@ -633,6 +681,15 @@
     };
   }
 
+  if (length) {
+    length.onChange = (v) => {
+      updateFormula(
+        cycle ? cycle.displayValue : 10,
+        v
+      );
+    };
+  }
+
   if (cycle) {
     const gridSize = 2 * cycle.displayValue;
     currentCycleForClock = cycle.displayValue;
@@ -642,6 +699,9 @@
     updateSlopeAndWord(1, cycle.displayValue);
     updateOffsetThumb();
     drawSturmianPicker();
+
+    const initLen = length ? length.displayValue : 1;
+    updateFormula(cycle.displayValue, initLen);
 
     if (length) {
       length.setMax(gridSize);
@@ -657,6 +717,7 @@
       updateSlopeAndWord(1, cycleVal);
       updateOffsetThumb();
       drawSturmianPicker();
+      updateFormula(cycleVal, length ? length.displayValue : 1);
       if (length) {
         length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));

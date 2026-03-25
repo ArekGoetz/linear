@@ -33,7 +33,8 @@ html, body {
 
 /* ── Playground ──────────────────────────────────────────── */
 #playground {
-  --panel-width: 120px;
+  --right-panel-width: 120px;
+  --left-panel-width: 120px;
   position: relative;
   width: 100%;
   height: 100%;
@@ -52,13 +53,11 @@ html, body {
   outline: none;
 }
 
-/* ── Input Panel ─────────────────────────────────────────── */
-#input_panel {
+/* ── Side Panels (shared) ────────────────────────────────── */
+.side-panel {
   position: absolute;
   top: 0;
-  right: 0;
   height: 100%;
-  width: var(--panel-width);
   min-width: 0;
   background: var(--surface);
   backdrop-filter: blur(12px);
@@ -69,32 +68,43 @@ html, body {
   flex-direction: column;
   padding: 1em;
   gap: 0.2em;
-  font-size: var(--panel-font);
   overflow: hidden;
   overflow-y: auto;
   touch-action: none;
   will-change: width;
-  --panel-font: min(calc(var(--panel-width) / 8), 24px);
 }
 
-/* Snapping transitions driven from #playground.snapping ancestor */
-#playground.snapping #input_panel {
+.side-panel--right {
+  right: 0;
+  width: var(--right-panel-width);
+  --panel-font: min(calc(var(--right-panel-width) / 8), 24px);
+  font-size: var(--panel-font);
+}
+
+.side-panel--left {
+  left: 0;
+  width: var(--left-panel-width);
+  --panel-font: min(calc(var(--left-panel-width) / 8), 24px);
+  font-size: var(--panel-font);
+}
+
+/* Snapping transitions */
+#playground.snapping .side-panel {
   transition: width var(--transition-snap);
 }
 
-#playground.snapping #resize_handle {
-  transition: right var(--transition-snap), border-color 0.15s, background 0.15s;
+#playground.snapping .resize-handle {
+  transition: right var(--transition-snap), left var(--transition-snap),
+              border-color 0.15s, background 0.15s;
 }
 
-/* ── Resize Handle (sibling of panel, never clipped) ─────── */
-#resize_handle {
+/* ── Resize Handles (shared) ─────────────────────────────── */
+.resize-handle {
   position: absolute;
   top: 50%;
-  right: var(--panel-width);
   z-index: 10;
   width: 24px;
   height: 80px;
-  transform: translate(50%, -50%);
   border: 1.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   background: rgba(52, 52, 58, 0.9);
@@ -107,15 +117,25 @@ html, body {
   transition: border-color 0.15s, background 0.15s;
 }
 
-#resize_handle:hover,
-#resize_handle:active {
+.resize-handle--right {
+  right: var(--right-panel-width);
+  transform: translate(50%, -50%);
+}
+
+.resize-handle--left {
+  left: var(--left-panel-width);
+  transform: translate(-50%, -50%);
+}
+
+.resize-handle:hover,
+.resize-handle:active {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(50, 50, 56, 0.95);
 }
 
 /* Two dotted vertical grip lines */
-#resize_handle::before,
-#resize_handle::after {
+.resize-handle::before,
+.resize-handle::after {
   content: "";
   display: block;
   width: 0;
@@ -123,8 +143,8 @@ html, body {
   border-left: 2px dotted var(--handle-dot);
 }
 
-#resize_handle:hover::before,
-#resize_handle:hover::after {
+.resize-handle:hover::before,
+.resize-handle:hover::after {
   border-left-color: rgba(255, 255, 255, 0.55);
 }
 
@@ -138,6 +158,15 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 0.4em;
+}
+
+/* ── Formula Display (left panel) ────────────────────────── */
+.formula-display {
+  color: var(--text);
+  min-height: 2em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
 }
 
 /* ── Sturmian Picker Box ────────────────────────────────── */
@@ -323,7 +352,7 @@ html, body {
 
 /* ── Responsive / Touch ──────────────────────────────────── */
 @media (pointer: coarse) {
-  #resize_handle {
+  .resize-handle {
     width: 28px;
     height: 48px;
   }
@@ -340,6 +369,7 @@ html, body {
 
 @media (max-width: 600px) {
   #playground {
-    --panel-width: 120px;
+    --right-panel-width: 120px;
+    --left-panel-width: 120px;
   }
 }
