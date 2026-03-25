@@ -128,39 +128,47 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Compute Sturmian word via crossing-sequence algorithm:
-  // Line crosses vertical grid (x=int) → horizontal step → green (1)
-  // Line crosses horizontal grid (y=int) → vertical step → blue (-1)
-  // At grid points (tie) → blue (-1), go horizontal
-  // Guards ensure exactly p horizontal and k vertical steps = period
-  function computeSturmianWord(p, k, offset) {
-    if (p === 0) return [];
+  // Compute Sturmian crossings: the slope line intersects grid segments.
+  // Vertical segment (x,y)-(x,y+1) lower-closed upper-open → blue (-1)
+  // Horizontal segment (x,y)-(x+1,y) left-open right-closed → green (1)
+  // Returns [{t, type, x, y}, ...] sorted by parameter t along the line.
+  // Exactly p blue (vertical) + k green (horizontal) = period segments.
+  function computeSturmianCrossings(p, k, offset) {
     const eps = 1e-9;
-    const word = [];
-    let x = 0, y = Math.floor(offset);
-    let hCount = 0, vCount = 0;
-    for (let step = 0; step < p + k; step++) {
-      if (hCount >= p) {
-        word.push(-1); y++; vCount++;
-      } else if (vCount >= k) {
-        word.push(1); x++; hCount++;
-      } else {
-        // Crossing times: next vertical grid at x+1, next horizontal grid at y+1
-        const tv = (x + 1) / p;
-        const th = ((y + 1) - offset) / k;
-        if (tv < th - eps) {
-          // Vertical grid crossed first → horizontal step → green
-          word.push(1); x++; hCount++;
-        } else if (th < tv - eps) {
-          // Horizontal grid crossed first → vertical step → blue
-          word.push(-1); y++; vCount++;
-        } else {
-          // Grid point (tie) → blue, go horizontal
-          word.push(-1); x++; hCount++;
-        }
+    const crossings = [];
+
+    // Vertical grid crossings at x = 1, ..., p → blue
+    for (let i = 1; i <= p; i++) {
+      const t = i / p;
+      const yc = (k / p) * i + offset;
+      // Lower-closed: if yc is integer, segment starts at yc
+      const sy = (Math.abs(yc - Math.round(yc)) < eps)
+        ? Math.round(yc) : Math.floor(yc);
+      crossings.push({ t, type: -1, x: i, y: sy });
+    }
+
+    // Horizontal grid crossings → green
+    if (k > 0) {
+      const jMin = Math.ceil(offset + eps);
+      const jMax = Math.floor(k + offset + eps);
+      for (let j = jMin; j <= jMax; j++) {
+        const t = (j - offset) / k;
+        if (t < eps || t > 1 + eps) continue;
+        const xc = (j - offset) * p / k;
+        // Right-closed: if xc is integer, segment ends at xc
+        const sx = (Math.abs(xc - Math.round(xc)) < eps)
+          ? Math.round(xc) - 1 : Math.floor(xc);
+        crossings.push({ t, type: 1, x: sx, y: j });
       }
     }
-    return word;
+
+    crossings.sort((a, b) => a.t - b.t);
+    return crossings;
+  }
+
+  function computeSturmianWord(p, k, offset) {
+    if (p === 0) return [];
+    return computeSturmianCrossings(p, k, offset).map(c => c.type);
   }
 
   function updateSlopeAndWord(k, p) {
@@ -205,44 +213,27 @@
 
   function drawStaircase(p, k) {
     if (p === 0) return;
-    const eps = 1e-9;
     const n = currentGridN;
     const cellW = pickerCanvas.width / n;
     const cellH = pickerCanvas.height / n;
+    const segs = computeSturmianCrossings(p, k, currentOffset);
 
-    let x = 0, y = Math.floor(currentOffset);
-    let hCount = 0, vCount = 0;
-    for (let step = 0; step < p + k; step++) {
-      let goH, isGridPoint = false;
-      if (hCount >= p) goH = false;
-      else if (vCount >= k) goH = true;
-      else {
-        const tv = (x + 1) / p;
-        const th = ((y + 1) - currentOffset) / k;
-        if (tv < th - eps) goH = true;
-        else if (th < tv - eps) goH = false;
-        else { goH = true; isGridPoint = true; }
-      }
-      if (goH) {
-        // Horizontal step (crossing vertical grid) → green, grid point → blue
-        pickerCtx.strokeStyle = isGridPoint
-          ? "rgba(80, 140, 255, 0.85)"
-          : "rgba(80, 220, 80, 0.85)";
-        pickerCtx.lineWidth = 3;
-        pickerCtx.beginPath();
-        pickerCtx.moveTo(x * cellW, (n - y) * cellH);
-        pickerCtx.lineTo((x + 1) * cellW, (n - y) * cellH);
-        pickerCtx.stroke();
-        x++; hCount++;
-      } else {
-        // Vertical step (crossing horizontal grid) → blue
+    for (const s of segs) {
+      pickerCtx.lineWidth = 3;
+      if (s.type === -1) {
+        // Blue vertical segment: (s.x, s.y) → (s.x, s.y+1)
         pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
-        pickerCtx.lineWidth = 3;
         pickerCtx.beginPath();
-        pickerCtx.moveTo(x * cellW, (n - y) * cellH);
-        pickerCtx.lineTo(x * cellW, (n - y - 1) * cellH);
+        pickerCtx.moveTo(s.x * cellW, (n - s.y) * cellH);
+        pickerCtx.lineTo(s.x * cellW, (n - s.y - 1) * cellH);
         pickerCtx.stroke();
-        y++; vCount++;
+      } else {
+        // Green horizontal segment: (s.x, s.y) → (s.x+1, s.y)
+        pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
+        pickerCtx.beginPath();
+        pickerCtx.moveTo(s.x * cellW, (n - s.y) * cellH);
+        pickerCtx.lineTo((s.x + 1) * cellW, (n - s.y) * cellH);
+        pickerCtx.stroke();
       }
     }
   }
