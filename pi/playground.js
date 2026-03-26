@@ -107,8 +107,8 @@
         re += eps * Math.cos(angle);
         im += eps * Math.sin(angle);
       }
-      // Scale: radius / period so full-period aligned sum = radius
-      const scale = radius / period;
+      // Scale: radius = 1 unit in the complex plane (the drawn circle is the unit circle)
+      const scale = radius;
       const tipX = cx + re * scale;
       const tipY = cy + im * scale;
 
@@ -583,10 +583,10 @@
     const a = 2 / g;
     const b = n / g;
     let exp;
-    if (b === 1 && a === 1) exp = "\\pi i";
-    else if (b === 1) exp = a + "\\pi i";
-    else if (a === 1) exp = "\\frac{\\pi i}{" + b + "}";
-    else exp = "\\frac{" + a + "\\pi i}{" + b + "}";
+    if (b === 1 && a === 1) exp = "j\\pi i";
+    else if (b === 1) exp = a + "j\\pi i";
+    else if (a === 1) exp = "j\\frac{\\pi i}{" + b + "}";
+    else exp = "j\\frac{" + a + "\\pi i}{" + b + "}";
 
     const upper = L - 1;
     const tex = "\\displaystyle\\sum_{j=0}^{" + upper + "} \\epsilon_j \\, e^{-" + exp + "}";
