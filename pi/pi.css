@@ -9,7 +9,7 @@
 
 :root {
   --bg: #111113;
-  --surface: rgba(42, 42, 48, 0.80);
+  --surface: rgba(42, 42, 48, 0.70);
   --text: rgb(248, 248, 248);
   --text-dim: rgb(220, 220, 220);
   --handle-dot: rgba(255, 255, 255, 0.35);
@@ -60,8 +60,8 @@ html, body {
   height: 100%;
   min-width: 0;
   background: var(--surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border: none;
   z-index: 2;
   display: flex;
@@ -177,7 +177,7 @@ html, body {
   border-radius: 4px;
   flex-shrink: 0;
   position: relative;
-  background: #46464e;
+  background: rgba(70, 70, 78, 0.85);
   overflow: hidden;
 }
 
