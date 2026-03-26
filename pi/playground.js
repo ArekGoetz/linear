@@ -101,6 +101,48 @@
     return a;
   }
 
+  // Farey parents of k/p (coprime): find a/b, c/d such that
+  // a+c = k, b+d = p, b*k - a*p = 1 (mediant property)
+  function fareyParents(k, p) {
+    if (p <= 1 || k <= 0 || k >= p) return null;
+    // Extended GCD to find b such that b*k ≡ 1 (mod p)
+    let old_r = k, r = p;
+    let old_s = 1, s = 0;
+    while (r !== 0) {
+      const q = Math.floor(old_r / r);
+      [old_r, r] = [r, old_r - q * r];
+      [old_s, s] = [s, old_s - q * s];
+    }
+    let b = ((old_s % p) + p) % p;
+    if (b === 0) b = p;
+    const a = (b * k - 1) / p;
+    return { a, b, c: k - a, d: p - b };
+  }
+
+  function drawParallelogram(p, k) {
+    const parents = fareyParents(k, p);
+    if (!parents) return;
+    const { a, b, c, d } = parents;
+    const n = currentGridN;
+    const cellW = pickerCanvas.width / n;
+    const cellH = pickerCanvas.height / n;
+    const off = currentOffset;
+
+    // Parallelogram: long diagonal = slope line, short diagonal = Farey parents
+    // Vertices: (0,off), (b,a+off), (p,k+off), (d,c+off)
+    pickerCtx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    pickerCtx.lineWidth = 1;
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(0, (n - off) * cellH);
+    pickerCtx.lineTo(b * cellW, (n - a - off) * cellH);
+    pickerCtx.lineTo(p * cellW, (n - k - off) * cellH);
+    pickerCtx.lineTo(d * cellW, (n - c - off) * cellH);
+    pickerCtx.closePath();
+    pickerCtx.fill();
+    pickerCtx.stroke();
+  }
+
   function fracHTML(num, den) {
     return `<span class="vfrac"><span class="vfrac__num">${num}</span><span class="vfrac__den">${den}</span></span>`;
   }
@@ -241,7 +283,8 @@
   }
 
   function drawOverlay(v) {
-    // Staircase first (behind), then line on top
+    // Parallelogram (lowest z), then staircase, then line on top
+    drawParallelogram(v.p, v.k);
     drawStaircase(v.p, v.k);
     drawSturmianLine(v.p, v.k);
   }
@@ -254,7 +297,7 @@
     pickerCanvas.width = w;
     pickerCanvas.height = h;
 
-    pickerCtx.fillStyle = "#46464e";
+    pickerCtx.fillStyle = "rgba(70, 70, 78, 0.85)";
     pickerCtx.fillRect(0, 0, w, h);
 
     const cellW = w / n;
@@ -272,8 +315,8 @@
     }
     pickerCtx.stroke();
 
-    // Coprime circles at grid vertices
-    const r = Math.min(cellW, cellH) / 2;
+    // Coprime circles at grid vertices (diameter = 1/3 mesh)
+    const r = Math.min(cellW, cellH) / 6;
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 1;
     for (let p = 0; p <= n; p++) {
