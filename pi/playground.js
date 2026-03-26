@@ -77,8 +77,10 @@
       const cornerR = th * 0.3;
 
       // Color by Sturmian word: -1 → blue, 1 → green
+      // Use clockwise index so ε_j matches e^{-2πij/n} (CW on screen)
+      const cwIdx = ((n - k) % n);
       const wordVal = currentWord.length > 0
-        ? currentWord[k % period] : 0;
+        ? currentWord[cwIdx % period] : 0;
       let bgColor;
       if (wordVal === -1) bgColor = "rgba(80, 140, 255, 0.85)";
       else if (wordVal === 1) bgColor = "rgba(80, 220, 80, 0.85)";
@@ -471,7 +473,7 @@
   const snaps = [1, 120, 180, 240, 360, 480];
 
   function maxPanelWidth() {
-    return Math.floor(window.innerWidth / 3);
+    return Math.floor(window.innerWidth / 2);
   }
 
   function setupPanelResize(handleEl, panelEl, cssVar, direction) {
@@ -509,13 +511,19 @@
 
       const cur = panelEl.offsetWidth;
       const maxW = maxPanelWidth();
-      const validSnaps = snaps.filter(s => s <= maxW);
-      const nearest = validSnaps.reduce((a, b) =>
+      // Fixed snaps below max, plus maxW (= 50vw) as a dynamic half-window snap
+      const allSnaps = [...snaps.filter(s => s < maxW), maxW];
+      const nearest = allSnaps.reduce((a, b) =>
         Math.abs(b - cur) < Math.abs(a - cur) ? b : a
       );
 
       pg.classList.add("snapping");
-      setWidth(nearest);
+      if (nearest === maxW) {
+        // Use viewport unit so the panel tracks window width on resize
+        pg.style.setProperty(cssVar, "50vw");
+      } else {
+        setWidth(nearest);
+      }
     }
 
     handleEl.addEventListener("pointerdown", (e) => {
@@ -634,6 +642,7 @@
       this._value = el.dataset.value !== undefined ? Number(el.dataset.value) : this.min;
       this._dragging = false;
       this._pointerId = null;
+      this.onRelease = null;
 
       this._rail = el.querySelector(".pi-slider__rail");
       this._thumb = el.querySelector(".pi-slider__thumb");
@@ -707,6 +716,7 @@
       if (pid !== null) {
         try { this.el.releasePointerCapture(pid); } catch (_) {}
       }
+      if (this.onRelease) this.onRelease(this.displayValue);
     }
 
     _onKey(e) {
@@ -785,6 +795,15 @@
         updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
       }
       if (hoveredVertex || lockedVertex) drawSturmianPicker();
+    };
+    // Magnetic snap to nearest fraction on release
+    offsetSlider.onRelease = (v) => {
+      const maxDen = cycle ? 2 * cycle.displayValue : 20;
+      const f = close_frac(v, maxDen);
+      const target = f.num / f.den;
+      if (Math.abs(v - target) < 0.03) {
+        offsetSlider.setValue(target);
+      }
     };
   }
 
