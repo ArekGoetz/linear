@@ -15,6 +15,11 @@
   let currentWord = [];
   let currentLengthForClock = 1;
 
+  // Lattice of integer linear combinations of roots of unity
+  const latticeFineness = 3;
+  let latticePoints = [];
+  let hoveredLatticePoint = null;
+
   /* ── Roots of unity clock ──────────────────────────── */
   function drawUnityClock() {
     const w = canvas.width;
@@ -148,7 +153,118 @@
       ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.fill();
     }
+
+    // Hovered lattice point — small yellow circle
+    if (hoveredLatticePoint) {
+      const px = cx + hoveredLatticePoint.re * radius;
+      const py = cy + hoveredLatticePoint.im * radius;
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(255, 220, 50, 0.95)";
+      ctx.fill();
+    }
   }
+
+  /* ── Lattice of integer combinations of roots ────── */
+  function recomputeLattice(n) {
+    hoveredLatticePoint = null;
+    const f = latticeFineness;
+    const lo = -Math.floor((f - 1) / 2);  // -1 for f=3
+    const hi = lo + f - 1;                 //  1 for f=3
+    const total = Math.pow(f, n);
+
+    if (total > 200000) { latticePoints = []; return; }
+
+    // Roots in canvas coords: angle = -(2πk/n)
+    const roots = [];
+    for (let k = 0; k < n; k++) {
+      const angle = -(2 * Math.PI * k) / n;
+      roots.push([Math.cos(angle), Math.sin(angle)]);
+    }
+
+    const points = [];
+    const a = new Array(n).fill(lo);
+
+    for (let i = 0; i < total; i++) {
+      let re = 0, im = 0;
+      for (let k = 0; k < n; k++) {
+        re += a[k] * roots[k][0];
+        im += a[k] * roots[k][1];
+      }
+      // Trim trailing zeros for display
+      let last = n - 1;
+      while (last >= 0 && a[last] === 0) last--;
+      const label = last >= 0
+        ? a.slice(0, last + 1).join(", ") : "0";
+      points.push({ re, im, label });
+
+      // Increment coefficients (odometer: rightmost digit first)
+      for (let k = n - 1; k >= 0; k--) {
+        a[k]++;
+        if (a[k] > hi) a[k] = lo; else break;
+      }
+    }
+    latticePoints = points;
+  }
+
+  // Canvas tooltip for lattice points
+  const canvasTooltip = document.createElement("div");
+  canvasTooltip.style.cssText =
+    "position:fixed;pointer-events:none;z-index:9999;" +
+    "padding:0.25em 0.5em;border-radius:4px;" +
+    "background:rgba(255,235,140,0.94);color:#111113;" +
+    "font:600 13px/1 -apple-system,'SF Pro Display',system-ui,sans-serif;" +
+    "font-variant-numeric:tabular-nums;white-space:nowrap;" +
+    "opacity:0;transition:opacity 0.12s;transform:translate(-50%,-120%)";
+  document.getElementById("playground").appendChild(canvasTooltip);
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (latticePoints.length === 0) {
+      if (hoveredLatticePoint) { hoveredLatticePoint = null; drawUnityClock(); }
+      canvasTooltip.style.opacity = "0";
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const w = canvas.width, h = canvas.height;
+    const cxC = w / 2, cyC = h / 2;
+    const radius = Math.min(w, h) * 0.32;
+    const cRe = (mx - cxC) / radius;
+    const cIm = (my - cyC) / radius;
+
+    // 1% of canvas size in complex-plane units
+    const thresh = 0.01 * Math.min(w, h) / radius;
+    const thresh2 = thresh * thresh;
+
+    let best = null, bestD2 = thresh2;
+    for (let i = 0; i < latticePoints.length; i++) {
+      const p = latticePoints[i];
+      const dx = p.re - cRe, dy = p.im - cIm;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) { bestD2 = d2; best = p; }
+    }
+
+    if (best !== hoveredLatticePoint) {
+      hoveredLatticePoint = best;
+      drawUnityClock();
+    }
+    if (best) {
+      const px = cxC + best.re * radius;
+      const py = cyC + best.im * radius;
+      canvasTooltip.textContent = best.label;
+      canvasTooltip.style.left = (rect.left + px) + "px";
+      canvasTooltip.style.top = (rect.top + py) + "px";
+      canvasTooltip.style.opacity = "1";
+    } else {
+      canvasTooltip.style.opacity = "0";
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (hoveredLatticePoint) { hoveredLatticePoint = null; drawUnityClock(); }
+    canvasTooltip.style.opacity = "0";
+  });
 
   /* ── Sturmian Picker (coprimality) ────────────────── */
   const pickerCanvas = document.getElementById("picker_canvas");
@@ -824,6 +940,7 @@
   if (cycle) {
     const gridSize = 2 * cycle.displayValue;
     currentCycleForClock = cycle.displayValue;
+    recomputeLattice(cycle.displayValue);
     setPickerGridSize(gridSize);
     drawUnityClock();
     lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
@@ -841,6 +958,7 @@
     cycle.onChange = (cycleVal) => {
       const gs = 2 * cycleVal;
       currentCycleForClock = cycleVal;
+      recomputeLattice(cycleVal);
       setPickerGridSize(gs);
       drawUnityClock();
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
