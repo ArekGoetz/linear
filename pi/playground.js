@@ -11,6 +11,10 @@
   }
   new ResizeObserver(sizeCanvas).observe(canvas);
 
+  // Current Sturmian word for clock coloring (set from wiring section)
+  let currentWord = [];
+  let currentLengthForClock = 1;
+
   /* ── Roots of unity clock ──────────────────────────── */
   function drawUnityClock() {
     const w = canvas.width;
@@ -24,6 +28,7 @@
     const cy = h / 2;
     const radius = Math.min(w, h) * 0.32;
     const labelFont = Math.max(10, Math.min(16, radius / n * 2.5));
+    const period = currentWord.length || 1;
 
     // Real axis — thin gray horizontal line spanning full canvas width
     ctx.beginPath();
@@ -53,8 +58,7 @@
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Labels at roots of unity — centered ON the circle
-    // Standard complex analysis: 0 at east, proceeding counterclockwise
+    // Labels at roots of unity — colored by Sturmian word (repeating)
     ctx.font = `600 ${labelFont}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -72,15 +76,72 @@
       const th = labelFont + labelPad * 1.4;
       const cornerR = th * 0.3;
 
+      // Color by Sturmian word: -1 → blue, 1 → green
+      const wordVal = currentWord.length > 0
+        ? currentWord[k % period] : 0;
+      let bgColor;
+      if (wordVal === -1) bgColor = "rgba(80, 140, 255, 0.85)";
+      else if (wordVal === 1) bgColor = "rgba(80, 220, 80, 0.85)";
+      else bgColor = "rgba(255, 255, 255, 0.9)";
+
       // Rounded rectangle background
       ctx.beginPath();
       ctx.roundRect(lx - tw / 2, ly - th / 2, tw, th, cornerR);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.fillStyle = bgColor;
       ctx.fill();
 
       // Label text
       ctx.fillStyle = "#111113";
       ctx.fillText(text, lx, ly);
+    }
+
+    // Fourier sum vector: S = sum_{j=0}^{L-1} epsilon_j * e^{-2*pi*i*j/n}
+    if (currentWord.length > 0) {
+      const L = currentLengthForClock;
+      let re = 0, im = 0;
+      for (let j = 0; j < L; j++) {
+        const eps = currentWord[j % period];
+        const angle = -(2 * Math.PI * j) / n;
+        re += eps * Math.cos(angle);
+        im += eps * Math.sin(angle);
+      }
+      // Scale: radius / period so full-period aligned sum = radius
+      const scale = radius / period;
+      const tipX = cx + re * scale;
+      const tipY = cy + im * scale;
+
+      // Draw vector
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      // Arrowhead
+      const mag = Math.sqrt(re * re + im * im) * scale;
+      if (mag > 5) {
+        const headLen = Math.min(10, mag * 0.25);
+        const vecAngle = Math.atan2(tipY - cy, tipX - cx);
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(
+          tipX - headLen * Math.cos(vecAngle - 0.35),
+          tipY - headLen * Math.sin(vecAngle - 0.35)
+        );
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(
+          tipX - headLen * Math.cos(vecAngle + 0.35),
+          tipY - headLen * Math.sin(vecAngle + 0.35)
+        );
+        ctx.stroke();
+      }
+
+      // Small circle at tip
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.fill();
     }
   }
 
@@ -104,7 +165,8 @@
   // Farey parents of k/p (coprime): find a/b, c/d such that
   // a+c = k, b+d = p, b*k - a*p = 1 (mediant property)
   function fareyParents(k, p) {
-    if (p <= 1 || k <= 0 || k >= p) return null;
+    if (p <= 0 || k <= 0) return null;
+    if (p === 1 && k === 1) return null; // 1/1 has no proper parents
     // Extended GCD to find b such that b*k ≡ 1 (mod p)
     let old_r = k, r = p;
     let old_s = 1, s = 0;
@@ -218,13 +280,15 @@
   function updateSlopeAndWord(k, p) {
     slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(k, p) +
       '<span style="margin-left:1em">period\u00a0=\u00a0' + (k + p) + '</span>';
-    if (p === 0) { wordDisplay.innerHTML = ""; return; }
+    if (p === 0) { wordDisplay.innerHTML = ""; currentWord = []; drawUnityClock(); return; }
     const word = computeSturmianWord(p, k, currentOffset);
+    currentWord = word;
     wordDisplay.innerHTML = word.map(v =>
       v === -1
         ? '<span class="word-h">\u22121</span>'
         : '<span class="word-v">1</span>'
     ).join('\u2009');
+    drawUnityClock();
   }
 
   function drawSturmianLine(p, k) {
@@ -726,10 +790,12 @@
 
   if (length) {
     length.onChange = (v) => {
+      currentLengthForClock = v;
       updateFormula(
         cycle ? cycle.displayValue : 10,
         v
       );
+      drawUnityClock();
     };
   }
 
@@ -743,13 +809,12 @@
     updateOffsetThumb();
     drawSturmianPicker();
 
-    const initLen = length ? length.displayValue : 1;
-    updateFormula(cycle.displayValue, initLen);
-
     if (length) {
       length.setMax(gridSize);
       length.setValue(Math.floor(cycle.displayValue / 2));
+      currentLengthForClock = length.displayValue;
     }
+    updateFormula(cycle.displayValue, length ? length.displayValue : 1);
 
     cycle.onChange = (cycleVal) => {
       const gs = 2 * cycleVal;
@@ -760,11 +825,12 @@
       updateSlopeAndWord(1, cycleVal);
       updateOffsetThumb();
       drawSturmianPicker();
-      updateFormula(cycleVal, length ? length.displayValue : 1);
       if (length) {
         length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));
+        currentLengthForClock = length.displayValue;
       }
+      updateFormula(cycleVal, length ? length.displayValue : 1);
     };
   }
 
