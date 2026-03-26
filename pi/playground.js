@@ -78,8 +78,10 @@
 
       // Color by Sturmian word: -1 → blue, 1 → green
       // Use clockwise index so ε_j matches e^{-2πij/n} (CW on screen)
+      // Only color indices 0..L-1 (sum length); rest stay white
       const cwIdx = ((n - k) % n);
-      const wordVal = currentWord.length > 0
+      const L = currentLengthForClock;
+      const wordVal = (currentWord.length > 0 && cwIdx < L)
         ? currentWord[cwIdx % period] : 0;
       let bgColor;
       if (wordVal === -1) bgColor = "rgba(80, 140, 255, 0.85)";
