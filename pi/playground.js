@@ -98,12 +98,13 @@
     }
 
     // Fourier sum vector: S = sum_{j=0}^{L-1} epsilon_j * e^{-2*pi*i*j/n}
+    // Use positive canvas angle so the y-flip renders the negative-exponent sum correctly
     if (currentWord.length > 0) {
       const L = currentLengthForClock;
       let re = 0, im = 0;
       for (let j = 0; j < L; j++) {
         const eps = currentWord[j % period];
-        const angle = -(2 * Math.PI * j) / n;
+        const angle = (2 * Math.PI * j) / n;
         re += eps * Math.cos(angle);
         im += eps * Math.sin(angle);
       }
@@ -583,10 +584,10 @@
     const a = 2 / g;
     const b = n / g;
     let exp;
-    if (b === 1 && a === 1) exp = "j\\pi i";
-    else if (b === 1) exp = a + "j\\pi i";
-    else if (a === 1) exp = "j\\frac{\\pi i}{" + b + "}";
-    else exp = "j\\frac{" + a + "\\pi i}{" + b + "}";
+    if (b === 1 && a === 1) exp = "\\pi i j";
+    else if (b === 1) exp = a + "\\pi i j";
+    else if (a === 1) exp = "\\frac{\\pi i j}{" + b + "}";
+    else exp = "\\frac{" + a + "\\pi i j}{" + b + "}";
 
     const upper = L - 1;
     const tex = "\\displaystyle\\sum_{j=0}^{" + upper + "} \\epsilon_j \\, e^{-" + exp + "}";
