@@ -159,12 +159,12 @@
       ctx.fill();
     }
 
-    // Lattice dots — yellow single pixels
+    // Lattice dots — yellow 2×2 pixels
     if (cycloLatticeDots.length > 0) {
       ctx.fillStyle = "rgba(255, 220, 50, 0.7)";
       for (let i = 0; i < cycloLatticeDots.length; i++) {
         const d = cycloLatticeDots[i];
-        ctx.fillRect(cx + d.re * radius, cy + d.im * radius, 1, 1);
+        ctx.fillRect(cx + d.re * radius - 1, cy + d.im * radius - 1, 2, 2);
       }
     }
 
@@ -218,7 +218,7 @@
     const phi = cycloPhi;
     const side = 2 * maxCoeff + 1;
     const total = Math.pow(side, phi);
-    if (total > 4000) { cycloLatticeDots = []; return; }
+    if (total > 10000) { cycloLatticeDots = []; return; }
     const lo = -maxCoeff, hi = maxCoeff;
     const a = new Array(phi).fill(lo);
     const dots = [];
@@ -228,7 +228,9 @@
         re += a[k] * cycloBasis[k].re;
         im += a[k] * cycloBasis[k].im;
       }
-      dots.push({ re, im });
+      let last = phi - 1;
+      while (last >= 0 && a[last] === 0) last--;
+      dots.push({ re, im, label: last >= 0 ? a.slice(0, last + 1).join(", ") : "0" });
       for (let k = phi - 1; k >= 0; k--) {
         a[k]++;
         if (a[k] > hi) a[k] = lo; else break;
@@ -237,59 +239,7 @@
     cycloLatticeDots = dots;
   }
 
-  function findNearestLatticePoint(cRe, cIm, maxCoeff) {
-    if (cycloPhi === 0 || maxCoeff <= 0) return null;
-    let coeffs;
-    if (cycloGinv) {
-      const gRe = cycloGinv[0] * cRe + cycloGinv[1] * cIm;
-      const gIm = cycloGinv[2] * cRe + cycloGinv[3] * cIm;
-      coeffs = [];
-      for (let k = 0; k < cycloPhi; k++) {
-        coeffs.push(Math.round(cycloBasis[k].re * gRe + cycloBasis[k].im * gIm));
-      }
-    } else {
-      coeffs = [Math.round(cRe)];
-    }
-    for (let k = 0; k < coeffs.length; k++) {
-      if (Math.abs(coeffs[k]) > maxCoeff) return null;
-    }
-    let re = 0, im = 0;
-    for (let k = 0; k < coeffs.length; k++) {
-      re += coeffs[k] * cycloBasis[k].re;
-      im += coeffs[k] * cycloBasis[k].im;
-    }
-    const dx = re - cRe, dy = im - cIm;
-    if (dx * dx + dy * dy > 1 / 2500) return null; // 1/50 squared
-    let last = coeffs.length - 1;
-    while (last >= 0 && coeffs[last] === 0) last--;
-    return { re, im, label: last >= 0 ? coeffs.slice(0, last + 1).join(", ") : "0" };
-  }
-
-  // Fade animation
-  function startLatticeFade() {
-    function tick() {
-      latticeAlpha -= 0.015;
-      if (latticeAlpha <= 0) {
-        latticeAlpha = 0;
-        hoveredLatticePoint = null;
-        canvasTooltip.style.opacity = "0";
-        drawUnityClock();
-        fadeRAF = null;
-        return;
-      }
-      canvasTooltip.style.opacity = String(latticeAlpha);
-      drawUnityClock();
-      fadeRAF = requestAnimationFrame(tick);
-    }
-    if (fadeRAF) cancelAnimationFrame(fadeRAF);
-    fadeRAF = requestAnimationFrame(tick);
-  }
-
-  function stopLatticeFade() {
-    if (fadeRAF) { cancelAnimationFrame(fadeRAF); fadeRAF = null; }
-  }
-
-  // Canvas tooltip for lattice points
+  // Canvas tooltip for lattice points (CSS handles fade transition)
   const canvasTooltip = document.createElement("div");
   canvasTooltip.style.cssText =
     "position:fixed;pointer-events:none;z-index:9999;" +
@@ -297,14 +247,24 @@
     "background:rgba(255,235,140,0.94);color:#111113;" +
     "font:600 13px/1 -apple-system,'SF Pro Display',system-ui,sans-serif;" +
     "font-variant-numeric:tabular-nums;white-space:nowrap;" +
-    "opacity:0;transition:none;transform:translate(-50%,-120%)";
+    "opacity:0;transition:opacity 0.8s ease-out;transform:translate(-50%,-120%)";
   document.getElementById("playground").appendChild(canvasTooltip);
 
+  function beginLatticeFade() {
+    canvasTooltip.style.opacity = "0";
+    if (fadeRAF) clearTimeout(fadeRAF);
+    fadeRAF = setTimeout(() => {
+      hoveredLatticePoint = null;
+      latticeAlpha = 0;
+      drawUnityClock();
+      fadeRAF = null;
+    }, 800);
+  }
+
   canvas.addEventListener("mousemove", (e) => {
-    if (currentLatticeMax <= 0) {
+    if (cycloLatticeDots.length === 0) {
       if (hoveredLatticePoint) {
-        hoveredLatticePoint = null; latticeAlpha = 0;
-        stopLatticeFade(); drawUnityClock();
+        hoveredLatticePoint = null; latticeAlpha = 0; drawUnityClock();
       }
       canvasTooltip.style.opacity = "0";
       return;
@@ -318,29 +278,39 @@
     const cRe = (mx - cxC) / radius;
     const cIm = (my - cyC) / radius;
 
-    const hit = findNearestLatticePoint(cRe, cIm, currentLatticeMax);
+    // 1% of canvas size in complex-plane units
+    const thresh = 0.01 * Math.min(w, h) / radius;
+    const thresh2 = thresh * thresh;
 
-    if (hit) {
-      stopLatticeFade();
+    let best = null, bestD2 = thresh2;
+    for (let i = 0; i < cycloLatticeDots.length; i++) {
+      const d = cycloLatticeDots[i];
+      const dx = d.re - cRe, dy = d.im - cIm;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) { bestD2 = d2; best = d; }
+    }
+
+    if (best) {
+      if (fadeRAF) { clearTimeout(fadeRAF); fadeRAF = null; }
       const changed = !hoveredLatticePoint ||
-        Math.abs(hit.re - hoveredLatticePoint.re) > 1e-9 ||
-        Math.abs(hit.im - hoveredLatticePoint.im) > 1e-9;
-      hoveredLatticePoint = hit;
+        Math.abs(best.re - hoveredLatticePoint.re) > 1e-9 ||
+        Math.abs(best.im - hoveredLatticePoint.im) > 1e-9;
+      hoveredLatticePoint = best;
       latticeAlpha = 1;
       if (changed) drawUnityClock();
-      const px = cxC + hit.re * radius;
-      const py = cyC + hit.im * radius;
-      canvasTooltip.textContent = hit.label;
+      const px = cxC + best.re * radius;
+      const py = cyC + best.im * radius;
+      canvasTooltip.textContent = best.label;
       canvasTooltip.style.left = (rect.left + px) + "px";
       canvasTooltip.style.top = (rect.top + py) + "px";
       canvasTooltip.style.opacity = "1";
     } else if (hoveredLatticePoint && !fadeRAF) {
-      startLatticeFade();
+      beginLatticeFade();
     }
   });
 
   canvas.addEventListener("mouseleave", () => {
-    if (hoveredLatticePoint && !fadeRAF) startLatticeFade();
+    if (hoveredLatticePoint && !fadeRAF) beginLatticeFade();
   });
 
   /* ── Sturmian Picker (coprimality) ────────────────── */
@@ -843,6 +813,7 @@
       this._value = el.dataset.value !== undefined ? Number(el.dataset.value) : this.min;
       this._dragging = false;
       this._pointerId = null;
+      this._rawPct = null;
       this.onRelease = null;
 
       this._rail = el.querySelector(".pi-slider__rail");
@@ -900,20 +871,28 @@
       this.el.setPointerCapture(e.pointerId);
       this._pointerId = e.pointerId;
       this._dragging = true;
-      this._value = this._valueFromPct(this._pctFromX(e.clientX));
+      this.el.classList.add("dragging");
+      const pct = this._pctFromX(e.clientX);
+      this._rawPct = pct;
+      this._value = this._valueFromPct(pct);
       this._update();
     }
 
     _onMove(e) {
       if (!this._dragging) return;
-      this._value = this._valueFromPct(this._pctFromX(e.clientX));
+      const pct = this._pctFromX(e.clientX);
+      this._rawPct = pct;
+      this._value = this._valueFromPct(pct);
       this._update();
     }
 
     _onUp() {
       if (!this._dragging) return;
+      this._rawPct = null;
+      this.el.classList.remove("dragging");
       const pid = this._pointerId;
       this._release();
+      this._update();
       if (pid !== null) {
         try { this.el.releasePointerCapture(pid); } catch (_) {}
       }
@@ -937,10 +916,14 @@
     _release() {
       this._dragging = false;
       this._pointerId = null;
+      this._rawPct = null;
+      this.el.classList.remove("dragging");
     }
 
     _update() {
-      const pct = ((this._value - this.min) / (this.max - this.min)) * 100;
+      const pct = (this._rawPct != null)
+        ? this._rawPct * 100
+        : ((this._value - this.min) / (this.max - this.min)) * 100;
       this._rail.style.setProperty("--slider-pct", pct + "%");
 
       const display = this.displayValue;
@@ -1027,7 +1010,8 @@
       computeLatticeDots(currentCycleForClock, v);
       hoveredLatticePoint = null;
       latticeAlpha = 0;
-      stopLatticeFade();
+      if (fadeRAF) { clearTimeout(fadeRAF); fadeRAF = null; }
+      canvasTooltip.style.opacity = "0";
       drawUnityClock();
     };
   }
@@ -1076,7 +1060,7 @@
         cycloLatticeDots = [];
         hoveredLatticePoint = null;
         latticeAlpha = 0;
-        stopLatticeFade();
+        if (fadeRAF) { clearTimeout(fadeRAF); fadeRAF = null; }
       }
       updateFormula(cycleVal, length ? length.displayValue : 1);
     };

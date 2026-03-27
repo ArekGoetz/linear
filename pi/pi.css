@@ -311,6 +311,7 @@ html, body {
   background: var(--slider-fill);
   width: var(--slider-pct, 0%);
   pointer-events: none;
+  transition: width 0.15s ease-out;
 }
 
 .pi-slider__thumb {
@@ -332,8 +333,16 @@ html, body {
   color: var(--bg);
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-  transition: background-color 0.15s, transform 0.15s ease-out;
+  transition: left 0.15s ease-out, background-color 0.15s, transform 0.15s ease-out;
   transform-origin: center;
+}
+
+/* During drag: thumb and fill follow mouse instantly (no left/width transition) */
+.pi-slider.dragging .pi-slider__thumb {
+  transition: background-color 0.15s, transform 0.15s ease-out;
+}
+.pi-slider.dragging .pi-slider__fill {
+  transition: none;
 }
 
 /* Enlarge thumb on hover or when slider has keyboard focus */
