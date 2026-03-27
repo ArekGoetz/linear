@@ -15,10 +15,15 @@
   let currentWord = [];
   let currentLengthForClock = 1;
 
-  // Lattice of integer linear combinations of roots of unity
-  const latticeFineness = 3;
-  let latticePoints = [];
+  // Cyclotomic lattice — integer combos in power basis {1, ζ, …, ζ^{φ(n)-1}}
+  let cycloPhi = 0;
+  let cycloBasis = [];
+  let cycloGinv = null;
+  let cycloLatticeDots = [];
   let hoveredLatticePoint = null;
+  let latticeAlpha = 0;
+  let fadeRAF = null;
+  let currentLatticeMax = 0;
 
   /* ── Roots of unity clock ──────────────────────────── */
   function drawUnityClock() {
@@ -154,57 +159,134 @@
       ctx.fill();
     }
 
-    // Hovered lattice point — small yellow circle
-    if (hoveredLatticePoint) {
+    // Lattice dots — yellow single pixels
+    if (cycloLatticeDots.length > 0) {
+      ctx.fillStyle = "rgba(255, 220, 50, 0.7)";
+      for (let i = 0; i < cycloLatticeDots.length; i++) {
+        const d = cycloLatticeDots[i];
+        ctx.fillRect(cx + d.re * radius, cy + d.im * radius, 1, 1);
+      }
+    }
+
+    // Hovered lattice point — thin unfilled yellow circle (with fade)
+    if (hoveredLatticePoint && latticeAlpha > 0) {
       const px = cx + hoveredLatticePoint.re * radius;
       const py = cy + hoveredLatticePoint.im * radius;
       ctx.beginPath();
-      ctx.arc(px, py, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "rgba(255, 220, 50, 0.95)";
-      ctx.fill();
+      ctx.arc(px, py, 5, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(255, 220, 50, " + latticeAlpha + ")";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
   }
 
-  /* ── Lattice of integer combinations of roots ────── */
-  function recomputeLattice(n) {
-    hoveredLatticePoint = null;
-    const f = latticeFineness;
-    const lo = -Math.floor((f - 1) / 2);  // -1 for f=3
-    const hi = lo + f - 1;                 //  1 for f=3
-    const total = Math.pow(f, n);
-
-    if (total > 200000) { latticePoints = []; return; }
-
-    // Roots in canvas coords: angle = -(2πk/n)
-    const roots = [];
-    for (let k = 0; k < n; k++) {
-      const angle = -(2 * Math.PI * k) / n;
-      roots.push([Math.cos(angle), Math.sin(angle)]);
+  /* ── Cyclotomic lattice (pseudoinverse detection) ── */
+  function eulerTotient(n) {
+    let result = n, temp = n;
+    for (let p = 2; p * p <= temp; p++) {
+      if (temp % p === 0) {
+        while (temp % p === 0) temp /= p;
+        result -= result / p;
+      }
     }
+    if (temp > 1) result -= result / temp;
+    return result;
+  }
 
-    const points = [];
-    const a = new Array(n).fill(lo);
+  function precomputeCycloBasis(n) {
+    cycloPhi = eulerTotient(n);
+    cycloBasis = [];
+    for (let k = 0; k < cycloPhi; k++) {
+      const angle = -(2 * Math.PI * k) / n;
+      cycloBasis.push({ re: Math.cos(angle), im: Math.sin(angle) });
+    }
+    // Gram matrix G = M M^T (2×2)
+    let g00 = 0, g01 = 0, g11 = 0;
+    for (let k = 0; k < cycloPhi; k++) {
+      g00 += cycloBasis[k].re * cycloBasis[k].re;
+      g01 += cycloBasis[k].re * cycloBasis[k].im;
+      g11 += cycloBasis[k].im * cycloBasis[k].im;
+    }
+    const det = g00 * g11 - g01 * g01;
+    cycloGinv = Math.abs(det) > 1e-12
+      ? [g11 / det, -g01 / det, -g01 / det, g00 / det]
+      : null;
+  }
 
+  function computeLatticeDots(n, maxCoeff) {
+    if (maxCoeff <= 0) { cycloLatticeDots = []; return; }
+    const phi = cycloPhi;
+    const side = 2 * maxCoeff + 1;
+    const total = Math.pow(side, phi);
+    if (total > 4000) { cycloLatticeDots = []; return; }
+    const lo = -maxCoeff, hi = maxCoeff;
+    const a = new Array(phi).fill(lo);
+    const dots = [];
     for (let i = 0; i < total; i++) {
       let re = 0, im = 0;
-      for (let k = 0; k < n; k++) {
-        re += a[k] * roots[k][0];
-        im += a[k] * roots[k][1];
+      for (let k = 0; k < phi; k++) {
+        re += a[k] * cycloBasis[k].re;
+        im += a[k] * cycloBasis[k].im;
       }
-      // Trim trailing zeros for display
-      let last = n - 1;
-      while (last >= 0 && a[last] === 0) last--;
-      const label = last >= 0
-        ? a.slice(0, last + 1).join(", ") : "0";
-      points.push({ re, im, label });
-
-      // Increment coefficients (odometer: rightmost digit first)
-      for (let k = n - 1; k >= 0; k--) {
+      dots.push({ re, im });
+      for (let k = phi - 1; k >= 0; k--) {
         a[k]++;
         if (a[k] > hi) a[k] = lo; else break;
       }
     }
-    latticePoints = points;
+    cycloLatticeDots = dots;
+  }
+
+  function findNearestLatticePoint(cRe, cIm, maxCoeff) {
+    if (cycloPhi === 0 || maxCoeff <= 0) return null;
+    let coeffs;
+    if (cycloGinv) {
+      const gRe = cycloGinv[0] * cRe + cycloGinv[1] * cIm;
+      const gIm = cycloGinv[2] * cRe + cycloGinv[3] * cIm;
+      coeffs = [];
+      for (let k = 0; k < cycloPhi; k++) {
+        coeffs.push(Math.round(cycloBasis[k].re * gRe + cycloBasis[k].im * gIm));
+      }
+    } else {
+      coeffs = [Math.round(cRe)];
+    }
+    for (let k = 0; k < coeffs.length; k++) {
+      if (Math.abs(coeffs[k]) > maxCoeff) return null;
+    }
+    let re = 0, im = 0;
+    for (let k = 0; k < coeffs.length; k++) {
+      re += coeffs[k] * cycloBasis[k].re;
+      im += coeffs[k] * cycloBasis[k].im;
+    }
+    const dx = re - cRe, dy = im - cIm;
+    if (dx * dx + dy * dy > 1 / 2500) return null; // 1/50 squared
+    let last = coeffs.length - 1;
+    while (last >= 0 && coeffs[last] === 0) last--;
+    return { re, im, label: last >= 0 ? coeffs.slice(0, last + 1).join(", ") : "0" };
+  }
+
+  // Fade animation
+  function startLatticeFade() {
+    function tick() {
+      latticeAlpha -= 0.015;
+      if (latticeAlpha <= 0) {
+        latticeAlpha = 0;
+        hoveredLatticePoint = null;
+        canvasTooltip.style.opacity = "0";
+        drawUnityClock();
+        fadeRAF = null;
+        return;
+      }
+      canvasTooltip.style.opacity = String(latticeAlpha);
+      drawUnityClock();
+      fadeRAF = requestAnimationFrame(tick);
+    }
+    if (fadeRAF) cancelAnimationFrame(fadeRAF);
+    fadeRAF = requestAnimationFrame(tick);
+  }
+
+  function stopLatticeFade() {
+    if (fadeRAF) { cancelAnimationFrame(fadeRAF); fadeRAF = null; }
   }
 
   // Canvas tooltip for lattice points
@@ -215,12 +297,15 @@
     "background:rgba(255,235,140,0.94);color:#111113;" +
     "font:600 13px/1 -apple-system,'SF Pro Display',system-ui,sans-serif;" +
     "font-variant-numeric:tabular-nums;white-space:nowrap;" +
-    "opacity:0;transition:opacity 0.12s;transform:translate(-50%,-120%)";
+    "opacity:0;transition:none;transform:translate(-50%,-120%)";
   document.getElementById("playground").appendChild(canvasTooltip);
 
   canvas.addEventListener("mousemove", (e) => {
-    if (latticePoints.length === 0) {
-      if (hoveredLatticePoint) { hoveredLatticePoint = null; drawUnityClock(); }
+    if (currentLatticeMax <= 0) {
+      if (hoveredLatticePoint) {
+        hoveredLatticePoint = null; latticeAlpha = 0;
+        stopLatticeFade(); drawUnityClock();
+      }
       canvasTooltip.style.opacity = "0";
       return;
     }
@@ -233,37 +318,29 @@
     const cRe = (mx - cxC) / radius;
     const cIm = (my - cyC) / radius;
 
-    // 1% of canvas size in complex-plane units
-    const thresh = 0.01 * Math.min(w, h) / radius;
-    const thresh2 = thresh * thresh;
+    const hit = findNearestLatticePoint(cRe, cIm, currentLatticeMax);
 
-    let best = null, bestD2 = thresh2;
-    for (let i = 0; i < latticePoints.length; i++) {
-      const p = latticePoints[i];
-      const dx = p.re - cRe, dy = p.im - cIm;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestD2) { bestD2 = d2; best = p; }
-    }
-
-    if (best !== hoveredLatticePoint) {
-      hoveredLatticePoint = best;
-      drawUnityClock();
-    }
-    if (best) {
-      const px = cxC + best.re * radius;
-      const py = cyC + best.im * radius;
-      canvasTooltip.textContent = best.label;
+    if (hit) {
+      stopLatticeFade();
+      const changed = !hoveredLatticePoint ||
+        Math.abs(hit.re - hoveredLatticePoint.re) > 1e-9 ||
+        Math.abs(hit.im - hoveredLatticePoint.im) > 1e-9;
+      hoveredLatticePoint = hit;
+      latticeAlpha = 1;
+      if (changed) drawUnityClock();
+      const px = cxC + hit.re * radius;
+      const py = cyC + hit.im * radius;
+      canvasTooltip.textContent = hit.label;
       canvasTooltip.style.left = (rect.left + px) + "px";
       canvasTooltip.style.top = (rect.top + py) + "px";
       canvasTooltip.style.opacity = "1";
-    } else {
-      canvasTooltip.style.opacity = "0";
+    } else if (hoveredLatticePoint && !fadeRAF) {
+      startLatticeFade();
     }
   });
 
   canvas.addEventListener("mouseleave", () => {
-    if (hoveredLatticePoint) { hoveredLatticePoint = null; drawUnityClock(); }
-    canvasTooltip.style.opacity = "0";
+    if (hoveredLatticePoint && !fadeRAF) startLatticeFade();
   });
 
   /* ── Sturmian Picker (coprimality) ────────────────── */
@@ -701,20 +778,25 @@
     const g = gcd(2, n);
     const a = 2 / g;
     const b = n / g;
-    let exp;
-    if (b === 1 && a === 1) exp = "\\pi i j";
-    else if (b === 1) exp = a + "\\pi i j";
-    else if (a === 1) exp = "\\frac{\\pi i j}{" + b + "}";
-    else exp = "\\frac{" + a + "\\pi i j}{" + b + "}";
+
+    // ζ = e^{2πi/n} simplified
+    let zetaExp;
+    if (b === 1 && a === 1) zetaExp = "\\pi i";
+    else if (b === 1) zetaExp = a + "\\pi i";
+    else if (a === 1) zetaExp = "\\frac{\\pi i}{" + b + "}";
+    else zetaExp = "\\frac{" + a + "\\pi i}{" + b + "}";
 
     const upper = L - 1;
-    const tex = "\\displaystyle\\sum_{j=0}^{" + upper + "} \\epsilon_j \\, e^{-" + exp + "}";
+    const tex1 = "\\zeta = e^{" + zetaExp + "}";
+    const tex2 = "\\displaystyle\\sum_{j=0}^{" + upper + "} \\epsilon_j \\, \\zeta^{-j}";
+    const html = "\\(" + tex1 + "\\)<br>\\(" + tex2 + "\\)";
+
     if (window.MathJax && window.MathJax.typesetPromise) {
       MathJax.typesetClear([formulaDisplay]);
-      formulaDisplay.innerHTML = "\\(" + tex + "\\)";
+      formulaDisplay.innerHTML = html;
       MathJax.typesetPromise([formulaDisplay]);
     } else {
-      formulaDisplay.innerHTML = "\\(" + tex + "\\)";
+      formulaDisplay.innerHTML = html;
     }
   }
 
@@ -937,10 +1019,23 @@
     };
   }
 
+  const latticeSlider = sliders.sl_lattice;
+
+  if (latticeSlider) {
+    latticeSlider.onChange = (v) => {
+      currentLatticeMax = v;
+      computeLatticeDots(currentCycleForClock, v);
+      hoveredLatticePoint = null;
+      latticeAlpha = 0;
+      stopLatticeFade();
+      drawUnityClock();
+    };
+  }
+
   if (cycle) {
     const gridSize = 2 * cycle.displayValue;
     currentCycleForClock = cycle.displayValue;
-    recomputeLattice(cycle.displayValue);
+    precomputeCycloBasis(cycle.displayValue);
     setPickerGridSize(gridSize);
     drawUnityClock();
     lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
@@ -953,12 +1048,15 @@
       length.setValue(Math.floor(cycle.displayValue / 2));
       currentLengthForClock = length.displayValue;
     }
+    if (latticeSlider) {
+      latticeSlider.setMax(cycle.displayValue < 11 ? 2 : 1);
+    }
     updateFormula(cycle.displayValue, length ? length.displayValue : 1);
 
     cycle.onChange = (cycleVal) => {
       const gs = 2 * cycleVal;
       currentCycleForClock = cycleVal;
-      recomputeLattice(cycleVal);
+      precomputeCycloBasis(cycleVal);
       setPickerGridSize(gs);
       drawUnityClock();
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
@@ -969,6 +1067,16 @@
         length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));
         currentLengthForClock = length.displayValue;
+      }
+      // Reset cyclotomic lattice slider to 0 on cycle change
+      if (latticeSlider) {
+        latticeSlider.setMax(cycleVal < 11 ? 2 : 1);
+        latticeSlider.setValue(0);
+        currentLatticeMax = 0;
+        cycloLatticeDots = [];
+        hoveredLatticePoint = null;
+        latticeAlpha = 0;
+        stopLatticeFade();
       }
       updateFormula(cycleVal, length ? length.displayValue : 1);
     };
