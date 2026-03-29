@@ -444,9 +444,23 @@
     return crossings;
   }
 
+  // Mechanical word via standard floor formula.
+  // slope = k/p, period = k+p, density of green(+1) steps = k/period.
+  // s_j = floor((j+c) * k/period) - floor((j-1+c) * k/period), j=1..period
+  // where c = offset/period is the fractional phase shift.
+  // s_j=1 → green(+1), s_j=0 → blue(-1).
   function computeMechanicalWord(p, k, offset) {
-    if (p === 0) return [];
-    return computeMechanicalCrossings(p, k, offset).map(c => c.type);
+    if (p === 0 && k === 0) return [];
+    const period = k + p;
+    const t = k / period;
+    const c = offset / period;
+    const word = [];
+    for (let j = 1; j <= period; j++) {
+      const ij = j + c;
+      const s = Math.floor(ij * t) - Math.floor((ij - 1) * t);
+      word.push(s === 1 ? 1 : -1);
+    }
+    return word;
   }
 
   // Recursive Farey decomposition of a mechanical word into nested HTML
@@ -566,7 +580,8 @@
 
     // Axes — thin white lines at p=0 and k=0, arrows at positive ends
     const axisColor = "rgba(255, 255, 255, 0.45)";
-    const arrow = Math.min(cellW, cellH) * 0.4;
+    const fontSize = parseFloat(getComputedStyle(pickerCanvas.parentElement).fontSize) || 14;
+    const arrow = Math.max(4, fontSize * 0.45);
     pickerCtx.strokeStyle = axisColor;
     pickerCtx.fillStyle = axisColor;
     pickerCtx.lineWidth = 1;
@@ -962,8 +977,16 @@
       else return;
 
       e.preventDefault();
-      this._value = Math.max(this.min, Math.min(this.max, this._value + delta));
-      this._update();
+      if (this.onKeyStep) {
+        const next = this.onKeyStep(delta > 0 ? 1 : -1);
+        if (next !== null) {
+          this._value = Math.max(this.min, Math.min(this.max, next));
+          this._update();
+        }
+      } else {
+        this._value = Math.max(this.min, Math.min(this.max, this._value + delta));
+        this._update();
+      }
     }
 
     _release() {
@@ -1032,6 +1055,34 @@
         updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
       }
       if (hoveredVertex || lockedVertex) drawMechanicalPicker();
+    };
+    // Keyboard: step through exact fractions
+    offsetSlider.onKeyStep = (dir) => {
+      const maxDen = cycle ? 2 * cycle.displayValue : 20;
+      // Build sorted list of unique fractions in [min, max]
+      const seen = new Set();
+      const fracs = [];
+      for (let d = 1; d <= maxDen; d++) {
+        const lo = Math.ceil(offsetSlider.min * d);
+        const hi = Math.floor(offsetSlider.max * d);
+        for (let n = lo; n <= hi; n++) {
+          const key = Math.round((n / d) * 1e9);
+          if (!seen.has(key)) { seen.add(key); fracs.push(n / d); }
+        }
+      }
+      fracs.sort((a, b) => a - b);
+      const cur = offsetSlider._value;
+      const eps = 1e-9;
+      if (dir > 0) {
+        const nxt = fracs.find(f => f > cur + eps);
+        return nxt !== undefined ? nxt : null;
+      } else {
+        let prev = null;
+        for (let i = fracs.length - 1; i >= 0; i--) {
+          if (fracs[i] < cur - eps) { prev = fracs[i]; break; }
+        }
+        return prev;
+      }
     };
     // Magnetic snap to nearest fraction on release
     offsetSlider.onRelease = (v) => {
