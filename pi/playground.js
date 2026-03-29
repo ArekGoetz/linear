@@ -414,15 +414,14 @@
     const eps = 1e-9;
     const crossings = [];
 
-    // Vertical grid crossings at x = 0, ..., p-1 → blue
-    // x=0 captures the y-axis segment; x=p-1 is the last interior vertical.
-    // The endpoint (p, k+offset) is captured by the horizontal right-closed convention.
-    for (let i = 0; i < p; i++) {
+    // Vertical grid crossings at x = 1, ..., p → blue
+    // The line from (0,offset) to (p,k+offset) crosses vertical grid lines
+    // at x=1,...,p. At equal t, verticals sort before horizontals (push order).
+    for (let i = 1; i <= p; i++) {
       const t = i / p;
       const yc = (k / p) * i + offset;
-      // Lower-closed: if yc is integer, segment starts at yc
       const sy = (Math.abs(yc - Math.round(yc)) < eps)
-        ? Math.round(yc) : Math.floor(yc);
+        ? Math.round(yc) - 1 : Math.floor(yc);
       crossings.push({ t, type: -1, x: i, y: sy });
     }
 
@@ -958,14 +957,13 @@
       let delta = 0;
       if (e.key === "ArrowRight" || e.key === "ArrowUp") delta = this.step * big;
       else if (e.key === "ArrowLeft" || e.key === "ArrowDown") delta = -this.step * big;
-      else if (e.key === "Home") { this._value = this.min; this._update(); if (this.onRelease) this.onRelease(this.displayValue); e.preventDefault(); return; }
-      else if (e.key === "End") { this._value = this.max; this._update(); if (this.onRelease) this.onRelease(this.displayValue); e.preventDefault(); return; }
+      else if (e.key === "Home") { this._value = this.min; this._update(); e.preventDefault(); return; }
+      else if (e.key === "End") { this._value = this.max; this._update(); e.preventDefault(); return; }
       else return;
 
       e.preventDefault();
       this._value = Math.max(this.min, Math.min(this.max, this._value + delta));
       this._update();
-      if (this.onRelease) this.onRelease(this.displayValue);
     }
 
     _release() {
