@@ -405,42 +405,34 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Compute Mechanical crossings: the slope line intersects grid segments.
-  // Vertical segment (x,y)-(x,y+1) lower-closed upper-open → blue (-1)
-  // Horizontal segment (x,y)-(x+1,y) left-open right-closed → green (1)
-  // Returns [{t, type, x, y}, ...] sorted by parameter t along the line.
-  // Exactly p blue (vertical) + k green (horizontal) = period segments.
+  // Compute staircase segments consistent with the floor-formula word.
+  // Returns [{type, x, y}, ...] for drawing blue/green grid edges.
   function computeMechanicalCrossings(p, k, offset) {
+    const word = computeMechanicalWord(p, k, offset);
+    if (word.length === 0) return [];
+
     const eps = 1e-9;
     const crossings = [];
+    let rx = 0, ry = 0; // cumulative right / up step counts
 
-    // Vertical grid crossings at x = 1, ..., p → blue
-    // The line from (0,offset) to (p,k+offset) crosses vertical grid lines
-    // at x=1,...,p. At equal t, verticals sort before horizontals (push order).
-    for (let i = 1; i <= p; i++) {
-      const t = i / p;
-      const yc = (k / p) * i + offset;
-      const sy = (Math.abs(yc - Math.round(yc)) < eps)
-        ? Math.round(yc) - 1 : Math.floor(yc);
-      crossings.push({ t, type: -1, x: i, y: sy });
-    }
-
-    // Horizontal grid crossings → green
-    if (k > 0) {
-      const jMin = Math.ceil(offset + eps);
-      const jMax = Math.floor(k + offset + eps);
-      for (let j = jMin; j <= jMax; j++) {
-        const t = (j - offset) / k;
-        if (t < eps || t > 1 + eps) continue;
-        const xc = (j - offset) * p / k;
-        // Right-closed: if xc is integer, segment ends at xc
-        const sx = (Math.abs(xc - Math.round(xc)) < eps)
-          ? Math.round(xc) - 1 : Math.floor(xc);
-        crossings.push({ t, type: 1, x: sx, y: j });
+    for (let j = 0; j < word.length; j++) {
+      if (word[j] === -1) {
+        // Blue (RIGHT): vertical edge at x = rx + 1
+        rx++;
+        const yLine = (k / p) * rx + offset;
+        const sy = (Math.abs(yLine - Math.round(yLine)) < eps)
+          ? Math.round(yLine) - 1 : Math.floor(yLine);
+        crossings.push({ type: -1, x: rx, y: sy });
+      } else {
+        // Green (UP): horizontal edge at y = ceil(offset) + ry
+        ry++;
+        const yEdge = Math.ceil(offset + eps) + ry - 1;
+        const xLine = k > 0 ? (yEdge - offset) * p / k : rx;
+        const sx = (Math.abs(xLine - Math.round(xLine)) < eps)
+          ? Math.round(xLine) - 1 : Math.floor(xLine);
+        crossings.push({ type: 1, x: sx, y: yEdge });
       }
     }
-
-    crossings.sort((a, b) => a.t - b.t);
     return crossings;
   }
 
@@ -463,9 +455,11 @@
     return word;
   }
 
-  // Recursive Farey decomposition of a mechanical word into nested HTML
-  function decomposeWordHTML(word, k, p) {
+  // Recursive Farey decomposition of a mechanical word into nested HTML.
+  // depth controls increasing padding per nesting level.
+  function decomposeWordHTML(word, k, p, depth) {
     if (word.length === 0) return '';
+    depth = depth || 0;
 
     // Base case: no further decomposition
     const parents = (k > 0 && p > 0 && !(k === 1 && p === 1))
@@ -486,11 +480,15 @@
     const wordA = word.slice(0, lenA);
     const wordB = word.slice(lenA);
 
-    const innerA = decomposeWordHTML(wordA, a, b);
-    const innerB = decomposeWordHTML(wordB, c, d);
+    const innerA = decomposeWordHTML(wordA, a, b, depth + 1);
+    const innerB = decomposeWordHTML(wordB, c, d, depth + 1);
 
-    return '<span class="word-nest-a">' + innerA + '</span>' +
-           '<span class="word-nest-b">' + innerB + '</span>';
+    const pv = 2 + depth;
+    const ph = pv + 2;
+    const pad = 'padding:' + pv + 'px ' + ph + 'px';
+
+    return '<span class="word-nest-a" style="' + pad + '">' + innerA + '</span>' +
+           '<span class="word-nest-b" style="' + pad + '">' + innerB + '</span>';
   }
 
   function updateSlopeAndWord(k, p) {
