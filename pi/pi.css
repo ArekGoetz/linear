@@ -260,16 +260,18 @@ html, body {
 .word-nest-a,
 .word-nest-b {
   display: inline;
-  padding: 1px 2px;
+  padding: 2px 4px;
   border-radius: 2px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 .word-nest-a {
   background: rgba(160, 160, 175, 0.20);
+  border: 1px solid rgba(110, 110, 130, 0.50);
 }
 .word-nest-b {
   background: rgba(215, 195, 140, 0.20);
+  border: 1px solid rgba(160, 135, 70, 0.50);
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
