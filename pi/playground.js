@@ -565,15 +565,38 @@
     }
     pickerCtx.stroke();
 
-    // Axes — thin white lines at p=0 and k=0
-    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    // Axes — thin white lines at p=0 and k=0, arrows at positive ends
+    const axisColor = "rgba(255, 255, 255, 0.45)";
+    const arrow = Math.min(cellW, cellH) * 0.4;
+    pickerCtx.strokeStyle = axisColor;
+    pickerCtx.fillStyle = axisColor;
     pickerCtx.lineWidth = 1;
+
+    // y-axis (vertical) with arrow at top (positive k direction)
+    const ax = gpx(0);
     pickerCtx.beginPath();
-    pickerCtx.moveTo(gpx(0), 0);
-    pickerCtx.lineTo(gpx(0), h);
-    pickerCtx.moveTo(0, gpy(0));
-    pickerCtx.lineTo(w, gpy(0));
+    pickerCtx.moveTo(ax, h);
+    pickerCtx.lineTo(ax, 0);
     pickerCtx.stroke();
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(ax, 0);
+    pickerCtx.lineTo(ax - arrow * 0.3, arrow);
+    pickerCtx.lineTo(ax + arrow * 0.3, arrow);
+    pickerCtx.closePath();
+    pickerCtx.fill();
+
+    // x-axis (horizontal) with arrow at right (positive p direction)
+    const ay = gpy(0);
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(0, ay);
+    pickerCtx.lineTo(w, ay);
+    pickerCtx.stroke();
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(w, ay);
+    pickerCtx.lineTo(w - arrow, ay - arrow * 0.3);
+    pickerCtx.lineTo(w - arrow, ay + arrow * 0.3);
+    pickerCtx.closePath();
+    pickerCtx.fill();
 
     // Coprime circles at grid vertices (diameter = 1/3 mesh)
     const maxCoord = n - 2; // = 2*cycle - 1, but we go up to 2*cycle = n-1
@@ -935,13 +958,14 @@
       let delta = 0;
       if (e.key === "ArrowRight" || e.key === "ArrowUp") delta = this.step * big;
       else if (e.key === "ArrowLeft" || e.key === "ArrowDown") delta = -this.step * big;
-      else if (e.key === "Home") { this._value = this.min; this._update(); e.preventDefault(); return; }
-      else if (e.key === "End") { this._value = this.max; this._update(); e.preventDefault(); return; }
+      else if (e.key === "Home") { this._value = this.min; this._update(); if (this.onRelease) this.onRelease(this.displayValue); e.preventDefault(); return; }
+      else if (e.key === "End") { this._value = this.max; this._update(); if (this.onRelease) this.onRelease(this.displayValue); e.preventDefault(); return; }
       else return;
 
       e.preventDefault();
       this._value = Math.max(this.min, Math.min(this.max, this._value + delta));
       this._update();
+      if (this.onRelease) this.onRelease(this.displayValue);
     }
 
     _release() {
