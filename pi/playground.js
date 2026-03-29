@@ -349,13 +349,18 @@
     return { a, b, c: k - a, d: p - b };
   }
 
+  // Grid-to-pixel helpers (grid ranges from -1 to currentGridN - 2)
+  function gpx(p) {
+    return (p + 1) * (pickerCanvas.width / currentGridN);
+  }
+  function gpy(k) {
+    return (currentGridN - 1 - k) * (pickerCanvas.height / currentGridN);
+  }
+
   function drawParallelogram(p, k) {
     const parents = fareyParents(k, p);
     if (!parents) return;
     const { a, b, c, d } = parents;
-    const n = currentGridN;
-    const cellW = pickerCanvas.width / n;
-    const cellH = pickerCanvas.height / n;
     const off = currentOffset;
 
     // Parallelogram: long diagonal = slope line, short diagonal = Farey parents
@@ -364,10 +369,10 @@
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.12)";
     pickerCtx.lineWidth = 1;
     pickerCtx.beginPath();
-    pickerCtx.moveTo(0, (n - off) * cellH);
-    pickerCtx.lineTo(b * cellW, (n - a - off) * cellH);
-    pickerCtx.lineTo(p * cellW, (n - k - off) * cellH);
-    pickerCtx.lineTo(d * cellW, (n - c - off) * cellH);
+    pickerCtx.moveTo(gpx(0), gpy(off));
+    pickerCtx.lineTo(gpx(b), gpy(a + off));
+    pickerCtx.lineTo(gpx(p), gpy(k + off));
+    pickerCtx.lineTo(gpx(d), gpy(c + off));
     pickerCtx.closePath();
     pickerCtx.fill();
     pickerCtx.stroke();
@@ -486,38 +491,25 @@
   }
 
   function drawMechanicalLine(p, k) {
-    const n = currentGridN;
-    const w = pickerCanvas.width;
-    const h = pickerCanvas.height;
-    const cellW = w / n;
-    const cellH = h / n;
-
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.75)";
     pickerCtx.lineWidth = 1;
 
     if (p === 0) {
       pickerCtx.beginPath();
-      pickerCtx.moveTo(0, 0);
-      pickerCtx.lineTo(0, h);
+      pickerCtx.moveTo(gpx(0), 0);
+      pickerCtx.lineTo(gpx(0), pickerCanvas.height);
       pickerCtx.stroke();
       return;
     }
 
-    const cx0 = 0;
-    const cy0 = (n - currentOffset) * cellH;
-    const cx1 = p * cellW;
-    const cy1 = (n - k - currentOffset) * cellH;
     pickerCtx.beginPath();
-    pickerCtx.moveTo(cx0, cy0);
-    pickerCtx.lineTo(cx1, cy1);
+    pickerCtx.moveTo(gpx(0), gpy(currentOffset));
+    pickerCtx.lineTo(gpx(p), gpy(k + currentOffset));
     pickerCtx.stroke();
   }
 
   function drawStaircase(p, k) {
     if (p === 0) return;
-    const n = currentGridN;
-    const cellW = pickerCanvas.width / n;
-    const cellH = pickerCanvas.height / n;
     const segs = computeMechanicalCrossings(p, k, currentOffset);
 
     for (const s of segs) {
@@ -526,15 +518,15 @@
         // Blue vertical segment: (s.x, s.y) → (s.x, s.y+1)
         pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.beginPath();
-        pickerCtx.moveTo(s.x * cellW, (n - s.y) * cellH);
-        pickerCtx.lineTo(s.x * cellW, (n - s.y - 1) * cellH);
+        pickerCtx.moveTo(gpx(s.x), gpy(s.y));
+        pickerCtx.lineTo(gpx(s.x), gpy(s.y + 1));
         pickerCtx.stroke();
       } else {
         // Green horizontal segment: (s.x, s.y) → (s.x+1, s.y)
         pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
         pickerCtx.beginPath();
-        pickerCtx.moveTo(s.x * cellW, (n - s.y) * cellH);
-        pickerCtx.lineTo((s.x + 1) * cellW, (n - s.y) * cellH);
+        pickerCtx.moveTo(gpx(s.x), gpy(s.y));
+        pickerCtx.lineTo(gpx(s.x + 1), gpy(s.y));
         pickerCtx.stroke();
       }
     }
@@ -548,7 +540,7 @@
   }
 
   function drawMechanicalPicker() {
-    const n = currentGridN;
+    const n = currentGridN;   // = 2*cycle + 1 cells; grid from -1 to 2*cycle
     const w = pickerCanvas.clientWidth;
     const h = pickerCanvas.clientHeight;
     if (w === 0 || h === 0) return;
@@ -561,7 +553,7 @@
     const cellW = w / n;
     const cellH = h / n;
 
-    // Grid lines
+    // Grid lines (lowest z)
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 0.5;
     pickerCtx.beginPath();
@@ -573,15 +565,26 @@
     }
     pickerCtx.stroke();
 
+    // Axes — thin white lines at p=0 and k=0
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    pickerCtx.lineWidth = 1;
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(gpx(0), 0);
+    pickerCtx.lineTo(gpx(0), h);
+    pickerCtx.moveTo(0, gpy(0));
+    pickerCtx.lineTo(w, gpy(0));
+    pickerCtx.stroke();
+
     // Coprime circles at grid vertices (diameter = 1/3 mesh)
+    const maxCoord = n - 2; // = 2*cycle - 1, but we go up to 2*cycle = n-1
     const r = Math.min(cellW, cellH) / 6;
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 1;
-    for (let p = 0; p <= n; p++) {
-      for (let k = 0; k <= n; k++) {
+    for (let p = 0; p <= n - 1; p++) {
+      for (let k = 0; k <= n - 1; k++) {
         if (gcd(p, k) === 1) {
           pickerCtx.beginPath();
-          pickerCtx.arc(p * cellW, (n - k) * cellH, r, 0, 2 * Math.PI);
+          pickerCtx.arc(gpx(p), gpy(k), r, 0, 2 * Math.PI);
           pickerCtx.stroke();
         }
       }
@@ -601,12 +604,14 @@
     const cellW = boxW / n;
     const cellH = boxH / n;
     const r = Math.min(cellW, cellH) / 2;
-    const p = Math.round(mouseX / cellW);
-    const k = n - Math.round(mouseY / cellH);
-    if (p < 0 || p > n || k < 0 || k > n) return null;
+    // Grid from -1 to n-2; mouse → grid: p = round(mouseX/cellW) - 1
+    const p = Math.round(mouseX / cellW) - 1;
+    const k = (n - 1) - Math.round(mouseY / cellH);
+    const maxCoord = n - 1; // = 2*cycle
+    if (p < 0 || p > maxCoord || k < 0 || k > maxCoord) return null;
     if (gcd(p, k) !== 1) return null;
-    const vx = p * cellW;
-    const vy = (n - k) * cellH;
+    const vx = (p + 1) * cellW;
+    const vy = (n - 1 - k) * cellH;
     const dx = mouseX - vx;
     const dy = mouseY - vy;
     if (dx * dx + dy * dy > r * r) return null;
@@ -1012,7 +1017,14 @@
       const f = close_frac(v, maxDen);
       const target = f.num / f.den;
       if (Math.abs(v - target) < 0.03) {
-        offsetSlider.setValue(target);
+        offsetSlider._value = Math.max(offsetSlider.min, Math.min(offsetSlider.max, target));
+        const pct = ((target - offsetSlider.min) / (offsetSlider.max - offsetSlider.min)) * 100;
+        offsetSlider._rail.style.setProperty("--slider-pct", pct + "%");
+        offsetSlider._thumb.textContent =
+          f.den === 1 ? String(f.num) : f.num + "/" + f.den;
+        currentOffset = target;
+        if (lockedVertex) updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
+        if (hoveredVertex || lockedVertex) drawMechanicalPicker();
       }
     };
   }
@@ -1043,19 +1055,19 @@
   }
 
   if (cycle) {
-    const gridSize = 2 * cycle.displayValue;
-    currentCycleForClock = cycle.displayValue;
-    precomputeCycloBasis(cycle.displayValue);
-    setPickerGridSize(gridSize);
+    const cv = cycle.displayValue;
+    currentCycleForClock = cv;
+    precomputeCycloBasis(cv);
+    setPickerGridSize(2 * cv + 1);
     drawUnityClock();
-    lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
-    updateSlopeAndWord(1, cycle.displayValue);
+    lockedVertex = { p: cv, k: 1, vx: 0, vy: 0 };
+    updateSlopeAndWord(1, cv);
     updateOffsetThumb();
     drawMechanicalPicker();
 
     if (length) {
-      length.setMax(gridSize);
-      length.setValue(Math.floor(cycle.displayValue / 2));
+      length.setMax(2 * cv);
+      length.setValue(Math.floor(cv / 2));
       currentLengthForClock = length.displayValue;
     }
     if (latticeSlider) {
@@ -1064,17 +1076,16 @@
     updateFormula(cycle.displayValue, length ? length.displayValue : 1);
 
     cycle.onChange = (cycleVal) => {
-      const gs = 2 * cycleVal;
       currentCycleForClock = cycleVal;
       precomputeCycloBasis(cycleVal);
-      setPickerGridSize(gs);
+      setPickerGridSize(2 * cycleVal + 1);
       drawUnityClock();
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
       updateSlopeAndWord(1, cycleVal);
       updateOffsetThumb();
       drawMechanicalPicker();
       if (length) {
-        length.setMax(gs);
+        length.setMax(2 * cycleVal);
         length.setValue(Math.floor(cycleVal / 2));
         currentLengthForClock = length.displayValue;
       }
