@@ -11,7 +11,7 @@
   }
   new ResizeObserver(sizeCanvas).observe(canvas);
 
-  // Current Sturmian word for clock coloring (set from wiring section)
+  // Current Mechanical word for clock coloring (set from wiring section)
   let currentWord = [];
   let currentLengthForClock = 1;
 
@@ -68,7 +68,7 @@
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Labels at roots of unity — colored by Sturmian word (repeating)
+    // Labels at roots of unity — colored by Mechanical word (repeating)
     ctx.font = `600 ${labelFont}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -86,7 +86,7 @@
       const th = labelFont + labelPad * 1.4;
       const cornerR = th * 0.3;
 
-      // Color by Sturmian word: -1 → blue, 1 → green
+      // Color by Mechanical word: -1 → blue, 1 → green
       // Use clockwise index so ε_j matches e^{-2πij/n} (CW on screen)
       // Only color indices 0..L-1 (sum length); rest stay white
       const cwIdx = ((n - k) % n);
@@ -313,7 +313,7 @@
     if (hoveredLatticePoint && !fadeRAF) beginLatticeFade();
   });
 
-  /* ── Sturmian Picker (coprimality) ────────────────── */
+  /* ── Mechanical Picker (coprimality) ────────────────── */
   const pickerCanvas = document.getElementById("picker_canvas");
   const pickerCtx = pickerCanvas.getContext("2d");
   const pickerTooltip = document.getElementById("picker_tooltip");
@@ -400,12 +400,12 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Compute Sturmian crossings: the slope line intersects grid segments.
+  // Compute Mechanical crossings: the slope line intersects grid segments.
   // Vertical segment (x,y)-(x,y+1) lower-closed upper-open → blue (-1)
   // Horizontal segment (x,y)-(x+1,y) left-open right-closed → green (1)
   // Returns [{t, type, x, y}, ...] sorted by parameter t along the line.
   // Exactly p blue (vertical) + k green (horizontal) = period segments.
-  function computeSturmianCrossings(p, k, offset) {
+  function computeMechanicalCrossings(p, k, offset) {
     const eps = 1e-9;
     const crossings = [];
 
@@ -440,26 +440,52 @@
     return crossings;
   }
 
-  function computeSturmianWord(p, k, offset) {
+  function computeMechanicalWord(p, k, offset) {
     if (p === 0) return [];
-    return computeSturmianCrossings(p, k, offset).map(c => c.type);
+    return computeMechanicalCrossings(p, k, offset).map(c => c.type);
+  }
+
+  // Recursive Farey decomposition of a mechanical word into nested HTML
+  function decomposeWordHTML(word, k, p) {
+    if (word.length === 0) return '';
+
+    // Base case: no further decomposition
+    const parents = (k > 0 && p > 0 && !(k === 1 && p === 1))
+      ? fareyParents(k, p) : null;
+
+    if (!parents) {
+      return word.map(v =>
+        v === -1
+          ? '<span class="word-h">1</span>'
+          : '<span class="word-v">1</span>'
+      ).join('');
+    }
+
+    const { a, b, c, d } = parents;
+    const lenA = a + b; // period of closest Farey parent
+    const lenB = c + d; // period of the other parent
+
+    const wordA = word.slice(0, lenA);
+    const wordB = word.slice(lenA);
+
+    const innerA = decomposeWordHTML(wordA, a, b);
+    const innerB = decomposeWordHTML(wordB, c, d);
+
+    return '<span class="word-nest-a">' + innerA + '</span>' +
+           '<span class="word-nest-b">' + innerB + '</span>';
   }
 
   function updateSlopeAndWord(k, p) {
     slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(k, p) +
       '<span style="margin-left:1em">period\u00a0=\u00a0' + (k + p) + '</span>';
     if (p === 0) { wordDisplay.innerHTML = ""; currentWord = []; drawUnityClock(); return; }
-    const word = computeSturmianWord(p, k, currentOffset);
+    const word = computeMechanicalWord(p, k, currentOffset);
     currentWord = word;
-    wordDisplay.innerHTML = word.map(v =>
-      v === -1
-        ? '<span class="word-h">\u22121</span>'
-        : '<span class="word-v">1</span>'
-    ).join('\u2009');
+    wordDisplay.innerHTML = decomposeWordHTML(word, k, p);
     drawUnityClock();
   }
 
-  function drawSturmianLine(p, k) {
+  function drawMechanicalLine(p, k) {
     const n = currentGridN;
     const w = pickerCanvas.width;
     const h = pickerCanvas.height;
@@ -492,7 +518,7 @@
     const n = currentGridN;
     const cellW = pickerCanvas.width / n;
     const cellH = pickerCanvas.height / n;
-    const segs = computeSturmianCrossings(p, k, currentOffset);
+    const segs = computeMechanicalCrossings(p, k, currentOffset);
 
     for (const s of segs) {
       pickerCtx.lineWidth = 3;
@@ -518,10 +544,10 @@
     // Parallelogram (lowest z), then staircase, then line on top
     drawParallelogram(v.p, v.k);
     drawStaircase(v.p, v.k);
-    drawSturmianLine(v.p, v.k);
+    drawMechanicalLine(v.p, v.k);
   }
 
-  function drawSturmianPicker() {
+  function drawMechanicalPicker() {
     const n = currentGridN;
     const w = pickerCanvas.clientWidth;
     const h = pickerCanvas.clientHeight;
@@ -599,20 +625,20 @@
 
     if (hit) {
       hoveredVertex = hit;
-      if (hit.p !== prevP || hit.k !== prevK) drawSturmianPicker();
+      if (hit.p !== prevP || hit.k !== prevK) drawMechanicalPicker();
       pickerTooltip.style.fontSize = getComputedStyle(rightPanel).fontSize;
       pickerTooltip.innerHTML = fracHTML(hit.k, hit.p);
       pickerTooltip.style.left = (rect.left + hit.vx) + "px";
       pickerTooltip.style.top  = (rect.top  + hit.vy) + "px";
       pickerTooltip.style.opacity = "1";
     } else {
-      if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
+      if (hoveredVertex) { hoveredVertex = null; drawMechanicalPicker(); }
       pickerTooltip.style.opacity = "0";
     }
   });
 
   pickerCanvas.addEventListener("mouseleave", () => {
-    if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
+    if (hoveredVertex) { hoveredVertex = null; drawMechanicalPicker(); }
     pickerTooltip.style.opacity = "0";
   });
 
@@ -625,13 +651,13 @@
     if (hit) {
       lockedVertex = hit;
       updateSlopeAndWord(hit.k, hit.p);
-      drawSturmianPicker();
+      drawMechanicalPicker();
     }
   });
 
   new ResizeObserver(() => {
     hoveredVertex = null;
-    drawSturmianPicker();
+    drawMechanicalPicker();
   }).observe(pickerCanvas);
 
   /* ── Panel resize (generic for both sides) ──────── */
@@ -953,7 +979,7 @@
     currentGridN = n;
     hoveredVertex = null;
     lockedVertex = null;
-    drawSturmianPicker();
+    drawMechanicalPicker();
   }
 
   // Wire cycle → length + picker grid
@@ -978,7 +1004,7 @@
       if (lockedVertex) {
         updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
       }
-      if (hoveredVertex || lockedVertex) drawSturmianPicker();
+      if (hoveredVertex || lockedVertex) drawMechanicalPicker();
     };
     // Magnetic snap to nearest fraction on release
     offsetSlider.onRelease = (v) => {
@@ -1025,7 +1051,7 @@
     lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
     updateSlopeAndWord(1, cycle.displayValue);
     updateOffsetThumb();
-    drawSturmianPicker();
+    drawMechanicalPicker();
 
     if (length) {
       length.setMax(gridSize);
@@ -1046,7 +1072,7 @@
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
       updateSlopeAndWord(1, cycleVal);
       updateOffsetThumb();
-      drawSturmianPicker();
+      drawMechanicalPicker();
       if (length) {
         length.setMax(gs);
         length.setValue(Math.floor(cycleVal / 2));

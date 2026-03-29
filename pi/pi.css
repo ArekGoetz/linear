@@ -170,7 +170,7 @@ html, body {
   padding: 0.5em 0;
 }
 
-/* ── Sturmian Picker Box ────────────────────────────────── */
+/* ── Mechanical Picker Box ──────────────────────────────── */
 .picker-box {
   width: 100%;
   aspect-ratio: 1;
@@ -221,7 +221,7 @@ html, body {
   padding: 0.05em 0.2em 0;
 }
 
-.sturmian-group {
+.mechanical-group {
   display: flex;
   flex-direction: column;
   gap: 0.2em;
@@ -248,11 +248,28 @@ html, body {
 }
 .word-h {
   color: rgba(80, 140, 255, 0.9);
-  padding: 0.05em 0.15em;
+  text-decoration: overline;
+  padding: 0.05em 0.1em;
 }
 .word-v {
   color: rgba(80, 220, 80, 0.9);
-  padding: 0.05em 0.15em;
+  padding: 0.05em 0.1em;
+}
+
+/* Recursive Farey decomposition nesting */
+.word-nest-a,
+.word-nest-b {
+  display: inline;
+  padding: 1px 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.word-nest-a {
+  background: rgba(160, 160, 175, 0.20);
+}
+.word-nest-b {
+  background: rgba(215, 195, 140, 0.20);
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
