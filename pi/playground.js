@@ -11,7 +11,7 @@
   }
   new ResizeObserver(sizeCanvas).observe(canvas);
 
-  // Current Sturmian word for clock coloring (set from wiring section)
+  // Current Mechanical word for clock coloring (set from wiring section)
   let currentWord = [];
   let currentLengthForClock = 1;
 
@@ -68,7 +68,7 @@
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Labels at roots of unity — colored by Sturmian word (repeating)
+    // Labels at roots of unity — colored by Mechanical word (repeating)
     ctx.font = `600 ${labelFont}px -apple-system, "SF Pro Display", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -86,7 +86,7 @@
       const th = labelFont + labelPad * 1.4;
       const cornerR = th * 0.3;
 
-      // Color by Sturmian word: -1 → blue, 1 → green
+      // Color by Mechanical word: -1 → blue, 1 → green
       // Use clockwise index so ε_j matches e^{-2πij/n} (CW on screen)
       // Only color indices 0..L-1 (sum length); rest stay white
       const cwIdx = ((n - k) % n);
@@ -313,7 +313,7 @@
     if (hoveredLatticePoint && !fadeRAF) beginLatticeFade();
   });
 
-  /* ── Sturmian Picker (coprimality) ────────────────── */
+  /* ── Mechanical Picker (coprimality) ────────────────── */
   const pickerCanvas = document.getElementById("picker_canvas");
   const pickerCtx = pickerCanvas.getContext("2d");
   const pickerTooltip = document.getElementById("picker_tooltip");
@@ -349,13 +349,18 @@
     return { a, b, c: k - a, d: p - b };
   }
 
+  // Grid-to-pixel helpers (grid ranges from -1 to currentGridN - 2)
+  function gpx(p) {
+    return (p + 1) * (pickerCanvas.width / currentGridN);
+  }
+  function gpy(k) {
+    return (currentGridN - 1 - k) * (pickerCanvas.height / currentGridN);
+  }
+
   function drawParallelogram(p, k) {
     const parents = fareyParents(k, p);
     if (!parents) return;
     const { a, b, c, d } = parents;
-    const n = currentGridN;
-    const cellW = pickerCanvas.width / n;
-    const cellH = pickerCanvas.height / n;
     const off = currentOffset;
 
     // Parallelogram: long diagonal = slope line, short diagonal = Farey parents
@@ -364,10 +369,10 @@
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.12)";
     pickerCtx.lineWidth = 1;
     pickerCtx.beginPath();
-    pickerCtx.moveTo(0, (n - off) * cellH);
-    pickerCtx.lineTo(b * cellW, (n - a - off) * cellH);
-    pickerCtx.lineTo(p * cellW, (n - k - off) * cellH);
-    pickerCtx.lineTo(d * cellW, (n - c - off) * cellH);
+    pickerCtx.moveTo(gpx(0), gpy(off));
+    pickerCtx.lineTo(gpx(b), gpy(a + off));
+    pickerCtx.lineTo(gpx(p), gpy(k + off));
+    pickerCtx.lineTo(gpx(d), gpy(c + off));
     pickerCtx.closePath();
     pickerCtx.fill();
     pickerCtx.stroke();
@@ -400,12 +405,12 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Compute Sturmian crossings: the slope line intersects grid segments.
+  // Compute Mechanical crossings: the slope line intersects grid segments.
   // Vertical segment (x,y)-(x,y+1) lower-closed upper-open → blue (-1)
   // Horizontal segment (x,y)-(x+1,y) left-open right-closed → green (1)
   // Returns [{t, type, x, y}, ...] sorted by parameter t along the line.
   // Exactly p blue (vertical) + k green (horizontal) = period segments.
-  function computeSturmianCrossings(p, k, offset) {
+  function computeMechanicalCrossings(p, k, offset) {
     const eps = 1e-9;
     const crossings = [];
 
@@ -440,59 +445,72 @@
     return crossings;
   }
 
-  function computeSturmianWord(p, k, offset) {
+  function computeMechanicalWord(p, k, offset) {
     if (p === 0) return [];
-    return computeSturmianCrossings(p, k, offset).map(c => c.type);
+    return computeMechanicalCrossings(p, k, offset).map(c => c.type);
+  }
+
+  // Recursive Farey decomposition of a mechanical word into nested HTML
+  function decomposeWordHTML(word, k, p) {
+    if (word.length === 0) return '';
+
+    // Base case: no further decomposition
+    const parents = (k > 0 && p > 0 && !(k === 1 && p === 1))
+      ? fareyParents(k, p) : null;
+
+    if (!parents) {
+      return word.map(v =>
+        v === -1
+          ? '<span class="word-h">1</span>'
+          : '<span class="word-v">1</span>'
+      ).join('');
+    }
+
+    const { a, b, c, d } = parents;
+    const lenA = a + b; // period of closest Farey parent
+    const lenB = c + d; // period of the other parent
+
+    const wordA = word.slice(0, lenA);
+    const wordB = word.slice(lenA);
+
+    const innerA = decomposeWordHTML(wordA, a, b);
+    const innerB = decomposeWordHTML(wordB, c, d);
+
+    return '<span class="word-nest-a">' + innerA + '</span>' +
+           '<span class="word-nest-b">' + innerB + '</span>';
   }
 
   function updateSlopeAndWord(k, p) {
     slopeDisplay.innerHTML = "slope\u00a0=\u00a0" + fracHTML(k, p) +
       '<span style="margin-left:1em">period\u00a0=\u00a0' + (k + p) + '</span>';
     if (p === 0) { wordDisplay.innerHTML = ""; currentWord = []; drawUnityClock(); return; }
-    const word = computeSturmianWord(p, k, currentOffset);
+    const word = computeMechanicalWord(p, k, currentOffset);
     currentWord = word;
-    wordDisplay.innerHTML = word.map(v =>
-      v === -1
-        ? '<span class="word-h">\u22121</span>'
-        : '<span class="word-v">1</span>'
-    ).join('\u2009');
+    wordDisplay.innerHTML = decomposeWordHTML(word, k, p);
     drawUnityClock();
   }
 
-  function drawSturmianLine(p, k) {
-    const n = currentGridN;
-    const w = pickerCanvas.width;
-    const h = pickerCanvas.height;
-    const cellW = w / n;
-    const cellH = h / n;
-
+  function drawMechanicalLine(p, k) {
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.75)";
     pickerCtx.lineWidth = 1;
 
     if (p === 0) {
       pickerCtx.beginPath();
-      pickerCtx.moveTo(0, 0);
-      pickerCtx.lineTo(0, h);
+      pickerCtx.moveTo(gpx(0), 0);
+      pickerCtx.lineTo(gpx(0), pickerCanvas.height);
       pickerCtx.stroke();
       return;
     }
 
-    const cx0 = 0;
-    const cy0 = (n - currentOffset) * cellH;
-    const cx1 = p * cellW;
-    const cy1 = (n - k - currentOffset) * cellH;
     pickerCtx.beginPath();
-    pickerCtx.moveTo(cx0, cy0);
-    pickerCtx.lineTo(cx1, cy1);
+    pickerCtx.moveTo(gpx(0), gpy(currentOffset));
+    pickerCtx.lineTo(gpx(p), gpy(k + currentOffset));
     pickerCtx.stroke();
   }
 
   function drawStaircase(p, k) {
     if (p === 0) return;
-    const n = currentGridN;
-    const cellW = pickerCanvas.width / n;
-    const cellH = pickerCanvas.height / n;
-    const segs = computeSturmianCrossings(p, k, currentOffset);
+    const segs = computeMechanicalCrossings(p, k, currentOffset);
 
     for (const s of segs) {
       pickerCtx.lineWidth = 3;
@@ -500,15 +518,15 @@
         // Blue vertical segment: (s.x, s.y) → (s.x, s.y+1)
         pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.beginPath();
-        pickerCtx.moveTo(s.x * cellW, (n - s.y) * cellH);
-        pickerCtx.lineTo(s.x * cellW, (n - s.y - 1) * cellH);
+        pickerCtx.moveTo(gpx(s.x), gpy(s.y));
+        pickerCtx.lineTo(gpx(s.x), gpy(s.y + 1));
         pickerCtx.stroke();
       } else {
         // Green horizontal segment: (s.x, s.y) → (s.x+1, s.y)
         pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
         pickerCtx.beginPath();
-        pickerCtx.moveTo(s.x * cellW, (n - s.y) * cellH);
-        pickerCtx.lineTo((s.x + 1) * cellW, (n - s.y) * cellH);
+        pickerCtx.moveTo(gpx(s.x), gpy(s.y));
+        pickerCtx.lineTo(gpx(s.x + 1), gpy(s.y));
         pickerCtx.stroke();
       }
     }
@@ -518,11 +536,11 @@
     // Parallelogram (lowest z), then staircase, then line on top
     drawParallelogram(v.p, v.k);
     drawStaircase(v.p, v.k);
-    drawSturmianLine(v.p, v.k);
+    drawMechanicalLine(v.p, v.k);
   }
 
-  function drawSturmianPicker() {
-    const n = currentGridN;
+  function drawMechanicalPicker() {
+    const n = currentGridN;   // = 2*cycle + 1 cells; grid from -1 to 2*cycle
     const w = pickerCanvas.clientWidth;
     const h = pickerCanvas.clientHeight;
     if (w === 0 || h === 0) return;
@@ -535,7 +553,7 @@
     const cellW = w / n;
     const cellH = h / n;
 
-    // Grid lines
+    // Grid lines (lowest z)
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 0.5;
     pickerCtx.beginPath();
@@ -547,15 +565,26 @@
     }
     pickerCtx.stroke();
 
+    // Axes — thin white lines at p=0 and k=0
+    pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    pickerCtx.lineWidth = 1;
+    pickerCtx.beginPath();
+    pickerCtx.moveTo(gpx(0), 0);
+    pickerCtx.lineTo(gpx(0), h);
+    pickerCtx.moveTo(0, gpy(0));
+    pickerCtx.lineTo(w, gpy(0));
+    pickerCtx.stroke();
+
     // Coprime circles at grid vertices (diameter = 1/3 mesh)
+    const maxCoord = n - 2; // = 2*cycle - 1, but we go up to 2*cycle = n-1
     const r = Math.min(cellW, cellH) / 6;
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 1;
-    for (let p = 0; p <= n; p++) {
-      for (let k = 0; k <= n; k++) {
+    for (let p = 0; p <= n - 1; p++) {
+      for (let k = 0; k <= n - 1; k++) {
         if (gcd(p, k) === 1) {
           pickerCtx.beginPath();
-          pickerCtx.arc(p * cellW, (n - k) * cellH, r, 0, 2 * Math.PI);
+          pickerCtx.arc(gpx(p), gpy(k), r, 0, 2 * Math.PI);
           pickerCtx.stroke();
         }
       }
@@ -575,12 +604,14 @@
     const cellW = boxW / n;
     const cellH = boxH / n;
     const r = Math.min(cellW, cellH) / 2;
-    const p = Math.round(mouseX / cellW);
-    const k = n - Math.round(mouseY / cellH);
-    if (p < 0 || p > n || k < 0 || k > n) return null;
+    // Grid from -1 to n-2; mouse → grid: p = round(mouseX/cellW) - 1
+    const p = Math.round(mouseX / cellW) - 1;
+    const k = (n - 1) - Math.round(mouseY / cellH);
+    const maxCoord = n - 1; // = 2*cycle
+    if (p < 0 || p > maxCoord || k < 0 || k > maxCoord) return null;
     if (gcd(p, k) !== 1) return null;
-    const vx = p * cellW;
-    const vy = (n - k) * cellH;
+    const vx = (p + 1) * cellW;
+    const vy = (n - 1 - k) * cellH;
     const dx = mouseX - vx;
     const dy = mouseY - vy;
     if (dx * dx + dy * dy > r * r) return null;
@@ -599,20 +630,20 @@
 
     if (hit) {
       hoveredVertex = hit;
-      if (hit.p !== prevP || hit.k !== prevK) drawSturmianPicker();
+      if (hit.p !== prevP || hit.k !== prevK) drawMechanicalPicker();
       pickerTooltip.style.fontSize = getComputedStyle(rightPanel).fontSize;
       pickerTooltip.innerHTML = fracHTML(hit.k, hit.p);
       pickerTooltip.style.left = (rect.left + hit.vx) + "px";
       pickerTooltip.style.top  = (rect.top  + hit.vy) + "px";
       pickerTooltip.style.opacity = "1";
     } else {
-      if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
+      if (hoveredVertex) { hoveredVertex = null; drawMechanicalPicker(); }
       pickerTooltip.style.opacity = "0";
     }
   });
 
   pickerCanvas.addEventListener("mouseleave", () => {
-    if (hoveredVertex) { hoveredVertex = null; drawSturmianPicker(); }
+    if (hoveredVertex) { hoveredVertex = null; drawMechanicalPicker(); }
     pickerTooltip.style.opacity = "0";
   });
 
@@ -625,13 +656,13 @@
     if (hit) {
       lockedVertex = hit;
       updateSlopeAndWord(hit.k, hit.p);
-      drawSturmianPicker();
+      drawMechanicalPicker();
     }
   });
 
   new ResizeObserver(() => {
     hoveredVertex = null;
-    drawSturmianPicker();
+    drawMechanicalPicker();
   }).observe(pickerCanvas);
 
   /* ── Panel resize (generic for both sides) ──────── */
@@ -953,7 +984,7 @@
     currentGridN = n;
     hoveredVertex = null;
     lockedVertex = null;
-    drawSturmianPicker();
+    drawMechanicalPicker();
   }
 
   // Wire cycle → length + picker grid
@@ -978,7 +1009,7 @@
       if (lockedVertex) {
         updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
       }
-      if (hoveredVertex || lockedVertex) drawSturmianPicker();
+      if (hoveredVertex || lockedVertex) drawMechanicalPicker();
     };
     // Magnetic snap to nearest fraction on release
     offsetSlider.onRelease = (v) => {
@@ -986,7 +1017,14 @@
       const f = close_frac(v, maxDen);
       const target = f.num / f.den;
       if (Math.abs(v - target) < 0.03) {
-        offsetSlider.setValue(target);
+        offsetSlider._value = Math.max(offsetSlider.min, Math.min(offsetSlider.max, target));
+        const pct = ((target - offsetSlider.min) / (offsetSlider.max - offsetSlider.min)) * 100;
+        offsetSlider._rail.style.setProperty("--slider-pct", pct + "%");
+        offsetSlider._thumb.textContent =
+          f.den === 1 ? String(f.num) : f.num + "/" + f.den;
+        currentOffset = target;
+        if (lockedVertex) updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
+        if (hoveredVertex || lockedVertex) drawMechanicalPicker();
       }
     };
   }
@@ -1017,19 +1055,19 @@
   }
 
   if (cycle) {
-    const gridSize = 2 * cycle.displayValue;
-    currentCycleForClock = cycle.displayValue;
-    precomputeCycloBasis(cycle.displayValue);
-    setPickerGridSize(gridSize);
+    const cv = cycle.displayValue;
+    currentCycleForClock = cv;
+    precomputeCycloBasis(cv);
+    setPickerGridSize(2 * cv + 1);
     drawUnityClock();
-    lockedVertex = { p: cycle.displayValue, k: 1, vx: 0, vy: 0 };
-    updateSlopeAndWord(1, cycle.displayValue);
+    lockedVertex = { p: cv, k: 1, vx: 0, vy: 0 };
+    updateSlopeAndWord(1, cv);
     updateOffsetThumb();
-    drawSturmianPicker();
+    drawMechanicalPicker();
 
     if (length) {
-      length.setMax(gridSize);
-      length.setValue(Math.floor(cycle.displayValue / 2));
+      length.setMax(2 * cv);
+      length.setValue(Math.floor(cv / 2));
       currentLengthForClock = length.displayValue;
     }
     if (latticeSlider) {
@@ -1038,17 +1076,16 @@
     updateFormula(cycle.displayValue, length ? length.displayValue : 1);
 
     cycle.onChange = (cycleVal) => {
-      const gs = 2 * cycleVal;
       currentCycleForClock = cycleVal;
       precomputeCycloBasis(cycleVal);
-      setPickerGridSize(gs);
+      setPickerGridSize(2 * cycleVal + 1);
       drawUnityClock();
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
       updateSlopeAndWord(1, cycleVal);
       updateOffsetThumb();
-      drawSturmianPicker();
+      drawMechanicalPicker();
       if (length) {
-        length.setMax(gs);
+        length.setMax(2 * cycleVal);
         length.setValue(Math.floor(cycleVal / 2));
         currentLengthForClock = length.displayValue;
       }
