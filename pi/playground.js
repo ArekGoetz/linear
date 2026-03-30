@@ -417,11 +417,11 @@
 
     for (let j = 0; j < word.length; j++) {
       if (word[j] === -1) {
-        // Blue (RIGHT): vertical edge at x = rx (0-indexed: 0…p-1)
-        const yLine = (k / p) * (rx + 1) + offset;
+        // Blue (RIGHT): vertical edge at x = rx+1 (1…p)
+        rx++;
+        const yLine = (k / p) * rx + offset;
         const sy = Math.floor(yLine);
         crossings.push({ type: -1, x: rx, y: sy });
-        rx++;
       } else {
         // Green (UP): horizontal edge at y = ceil(offset) + ry
         ry++;
@@ -482,12 +482,8 @@
     const innerA = decomposeWordHTML(wordA, a, b, depth + 1);
     const innerB = decomposeWordHTML(wordB, c, d, depth + 1);
 
-    const pv = 2 + depth;
-    const ph = pv + 2;
-    const pad = 'padding:' + pv + 'px ' + ph + 'px';
-
-    return '<span class="word-nest-a" style="' + pad + '">' + innerA + '</span>' +
-           '<span class="word-nest-b" style="' + pad + '">' + innerB + '</span>';
+    return '<span class="word-nest-a">' + innerA + '</span>' +
+           '<span class="word-nest-b">' + innerB + '</span>';
   }
 
   function updateSlopeAndWord(k, p) {
@@ -915,7 +911,7 @@
       this.el.addEventListener("pointermove", (e) => this._onMove(e));
       this.el.addEventListener("pointerup", () => this._onUp());
       this.el.addEventListener("pointercancel", () => this._onUp());
-      this.el.addEventListener("lostpointercapture", () => this._release());
+      this.el.addEventListener("lostpointercapture", () => this._onUp());
       this.el.addEventListener("keydown", (e) => this._onKey(e));
     }
 
