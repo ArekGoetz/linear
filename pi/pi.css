@@ -265,12 +265,14 @@ html, body {
   -webkit-box-decoration-break: clone;
 }
 .word-nest-a {
-  background: rgb(55, 55, 63);
-  border: 1px solid rgb(80, 80, 92);
+  background: rgba(210, 210, 220, 0.92);
+  border: 1px solid rgb(180, 180, 195);
+  padding: 0.33em;
 }
 .word-nest-b {
-  background: rgb(58, 52, 40);
-  border: 1px solid rgb(85, 73, 50);
+  background: rgba(235, 220, 180, 0.92);
+  border: 1px solid rgb(200, 185, 140);
+  padding: 0.33em;
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */

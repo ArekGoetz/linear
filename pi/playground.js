@@ -417,12 +417,11 @@
 
     for (let j = 0; j < word.length; j++) {
       if (word[j] === -1) {
-        // Blue (RIGHT): vertical edge at x = rx + 1
-        rx++;
-        const yLine = (k / p) * rx + offset;
-        const sy = (Math.abs(yLine - Math.round(yLine)) < eps)
-          ? Math.round(yLine) - 1 : Math.floor(yLine);
+        // Blue (RIGHT): vertical edge at x = rx (0-indexed: 0…p-1)
+        const yLine = (k / p) * (rx + 1) + offset;
+        const sy = Math.floor(yLine);
         crossings.push({ type: -1, x: rx, y: sy });
+        rx++;
       } else {
         // Green (UP): horizontal edge at y = ceil(offset) + ry
         ry++;
