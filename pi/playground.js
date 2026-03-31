@@ -405,34 +405,42 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Compute staircase segments consistent with the floor-formula word.
-  // Returns [{type, x, y}, ...] for drawing blue/green grid edges.
-  function computeMechanicalCrossings(p, k, offset) {
-    const word = computeMechanicalWord(p, k, offset);
-    if (word.length === 0) return [];
+  // Draw equispaced colored disks along the slope line [closed start, open end].
+  // Each disk colored blue or green according to the mechanical word.
+  function drawWordDots(p, k) {
+    if (p === 0 && k === 0) return;
+    const word = computeMechanicalWord(p, k, currentOffset);
+    const N = word.length; // = p + k
+    if (N === 0) return;
 
-    const eps = 1e-9;
-    const crossings = [];
-    let rx = 0, ry = 0; // cumulative right / up step counts
+    const cellW = pickerCanvas.width / currentGridN;
+    const cellH = pickerCanvas.height / currentGridN;
+    const dotR = Math.min(cellW, cellH) * 0.15;
 
-    for (let j = 0; j < word.length; j++) {
-      if (word[j] === -1) {
-        // Blue (RIGHT): vertical edge at x = rx+1 (1…p)
-        rx++;
-        const yLine = (k / p) * rx + offset;
-        const sy = Math.floor(yLine);
-        crossings.push({ type: -1, x: rx, y: sy });
+    // Line from (0, offset) to (p, k + offset), N equispaced points [0, N-1]
+    const x0 = 0, y0 = currentOffset;
+    const x1 = p, y1 = k + currentOffset;
+
+    for (let i = 0; i < N; i++) {
+      const t = N > 1 ? i / N : 0;
+      const gx = x0 + t * (x1 - x0);
+      const gy = y0 + t * (y1 - y0);
+      const px = gpx(gx);
+      const py = gpy(gy);
+
+      if (word[i] === -1) {
+        pickerCtx.fillStyle = "rgba(80, 140, 255, 0.85)";
+        pickerCtx.strokeStyle = "rgba(40, 80, 180, 1)";
       } else {
-        // Green (UP): horizontal edge at y = ceil(offset) + ry
-        ry++;
-        const yEdge = Math.ceil(offset + eps) + ry - 1;
-        const xLine = k > 0 ? (yEdge - offset) * p / k : rx;
-        const sx = (Math.abs(xLine - Math.round(xLine)) < eps)
-          ? Math.round(xLine) - 1 : Math.floor(xLine);
-        crossings.push({ type: 1, x: sx, y: yEdge });
+        pickerCtx.fillStyle = "rgba(80, 220, 80, 0.85)";
+        pickerCtx.strokeStyle = "rgba(30, 130, 30, 1)";
       }
+      pickerCtx.lineWidth = 1.5;
+      pickerCtx.beginPath();
+      pickerCtx.arc(px, py, dotR, 0, 2 * Math.PI);
+      pickerCtx.fill();
+      pickerCtx.stroke();
     }
-    return crossings;
   }
 
   // Mechanical word via standard floor formula.
@@ -514,34 +522,8 @@
     pickerCtx.stroke();
   }
 
-  function drawStaircase(p, k) {
-    if (p === 0) return;
-    const segs = computeMechanicalCrossings(p, k, currentOffset);
-
-    for (const s of segs) {
-      pickerCtx.lineWidth = 3;
-      if (s.type === -1) {
-        // Blue vertical segment: (s.x, s.y) → (s.x, s.y+1)
-        pickerCtx.strokeStyle = "rgba(80, 140, 255, 0.85)";
-        pickerCtx.beginPath();
-        pickerCtx.moveTo(gpx(s.x), gpy(s.y));
-        pickerCtx.lineTo(gpx(s.x), gpy(s.y + 1));
-        pickerCtx.stroke();
-      } else {
-        // Green horizontal segment: (s.x, s.y) → (s.x+1, s.y)
-        pickerCtx.strokeStyle = "rgba(80, 220, 80, 0.85)";
-        pickerCtx.beginPath();
-        pickerCtx.moveTo(gpx(s.x), gpy(s.y));
-        pickerCtx.lineTo(gpx(s.x + 1), gpy(s.y));
-        pickerCtx.stroke();
-      }
-    }
-  }
-
   function drawOverlay(v) {
-    // Parallelogram (lowest z), then staircase, then line on top
     drawParallelogram(v.p, v.k);
-    drawStaircase(v.p, v.k);
     drawMechanicalLine(v.p, v.k);
   }
 
@@ -559,7 +541,14 @@
     const cellW = w / n;
     const cellH = h / n;
 
-    // Grid lines (lowest z)
+    // Word dots (lowest z — drawn before grid and lines)
+    if (lockedVertex) drawWordDots(lockedVertex.p, lockedVertex.k);
+    if (hoveredVertex && (!lockedVertex ||
+        hoveredVertex.p !== lockedVertex.p || hoveredVertex.k !== lockedVertex.k)) {
+      drawWordDots(hoveredVertex.p, hoveredVertex.k);
+    }
+
+    // Grid lines
     pickerCtx.strokeStyle = "rgba(255, 255, 255, 0.14)";
     pickerCtx.lineWidth = 0.5;
     pickerCtx.beginPath();
@@ -949,15 +938,19 @@
 
     _onUp() {
       if (!this._dragging) return;
+      const pid = this._pointerId;
+      // Clear drag state
+      this._dragging = false;
+      this._pointerId = null;
       this._rawPct = null;
       this.el.classList.remove("dragging");
-      const pid = this._pointerId;
-      this._release();
+      // Magnetic snap before visual update
+      if (this.onRelease) this.onRelease(this.displayValue);
+      // Final visual update with snapped value
       this._update();
       if (pid !== null) {
         try { this.el.releasePointerCapture(pid); } catch (_) {}
       }
-      if (this.onRelease) this.onRelease(this.displayValue);
     }
 
     _onKey(e) {
@@ -982,12 +975,6 @@
       }
     }
 
-    _release() {
-      this._dragging = false;
-      this._pointerId = null;
-      this._rawPct = null;
-      this.el.classList.remove("dragging");
-    }
 
     _update() {
       const pct = (this._rawPct != null)
@@ -1078,19 +1065,13 @@
       }
     };
     // Magnetic snap to nearest fraction on release
+    // Modifies _value; _update() is called after this in _onUp
     offsetSlider.onRelease = (v) => {
       const maxDen = cycle ? 2 * cycle.displayValue : 20;
       const f = close_frac(v, maxDen);
       const target = f.num / f.den;
       if (Math.abs(v - target) < 0.03) {
         offsetSlider._value = Math.max(offsetSlider.min, Math.min(offsetSlider.max, target));
-        const pct = ((target - offsetSlider.min) / (offsetSlider.max - offsetSlider.min)) * 100;
-        offsetSlider._rail.style.setProperty("--slider-pct", pct + "%");
-        offsetSlider._thumb.textContent =
-          f.den === 1 ? String(f.num) : f.num + "/" + f.den;
-        currentOffset = target;
-        if (lockedVertex) updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
-        if (hoveredVertex || lockedVertex) drawMechanicalPicker();
       }
     };
   }
