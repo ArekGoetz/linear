@@ -405,26 +405,42 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Draw equispaced colored disks along the slope line [closed start, open end].
-  // Each disk colored blue or green according to the mechanical word.
+  // Draw colored disks at grid-line crossing points of the slope line.
+  // Each disk follows the mechanical word: blue = vertical crossing, green = horizontal.
+  // Domain: first closed quadrant only; left-closed, right-open (x < p).
   function drawWordDots(p, k) {
     if (p === 0 && k === 0) return;
     const word = computeMechanicalWord(p, k, currentOffset);
-    const N = word.length; // = p + k
+    const N = word.length;
     if (N === 0) return;
 
     const cellW = pickerCanvas.width / currentGridN;
     const cellH = pickerCanvas.height / currentGridN;
     const dotR = Math.min(cellW, cellH) * 0.15;
+    const eps = 1e-9;
 
-    // Line from (0, offset) to (p, k + offset), N equispaced points [0, N-1]
-    const x0 = 0, y0 = currentOffset;
-    const x1 = p, y1 = k + currentOffset;
-
+    let rx = 0, ry = 0;
     for (let i = 0; i < N; i++) {
-      const t = N > 1 ? i / N : 0;
-      const gx = x0 + t * (x1 - x0);
-      const gy = y0 + t * (y1 - y0);
+      let gx, gy;
+
+      if (word[i] === -1) {
+        // Blue: crossing with vertical grid line x = rx (0-indexed)
+        gx = rx;
+        gy = p > 0 ? (k / p) * rx + currentOffset : currentOffset;
+        rx++;
+      } else {
+        // Green: crossing with horizontal grid line y = yEdge
+        const yEdge = Math.ceil(currentOffset + eps) + ry;
+        gx = k > 0 ? (yEdge - currentOffset) * p / k : 0;
+        gy = yEdge;
+        ry++;
+      }
+
+      // First closed quadrant only
+      if (gy < -eps) continue;
+      // Right-open: exclude x = p (endpoint)
+      if (p > 0 && gx > p - eps) continue;
+
       const px = gpx(gx);
       const py = gpy(gy);
 

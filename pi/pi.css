@@ -258,23 +258,39 @@ html, body {
   padding: 0.05em 0.1em;
 }
 
-/* Recursive Farey decomposition nesting — opaque per level */
+/* Recursive Farey decomposition nesting — opaque per level.
+   inline-block so vertical padding actually expands the line box.
+   CSS nesting increases padding at each recursive depth via specificity. */
 .word-nest-a,
 .word-nest-b {
-  display: inline;
+  display: inline-block;
+  vertical-align: middle;
   border-radius: 4px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
+  padding: 0.2em 0.33em;
+
+  & :is(.word-nest-a, .word-nest-b) {
+    padding: 0.3em 0.44em;
+
+    & :is(.word-nest-a, .word-nest-b) {
+      padding: 0.4em 0.55em;
+
+      & :is(.word-nest-a, .word-nest-b) {
+        padding: 0.5em 0.66em;
+
+        & :is(.word-nest-a, .word-nest-b) {
+          padding: 0.6em 0.77em;
+        }
+      }
+    }
+  }
 }
 .word-nest-a {
   background: rgba(220, 220, 225, 0.92);
   border: 1px solid rgb(190, 190, 200);
-  padding: 0.33em;
 }
 .word-nest-b {
   background: rgba(240, 225, 185, 0.94);
   border: 1px solid rgb(210, 195, 150);
-  padding: 0.33em;
 }
 
 /* ── PiSlider ───────────────────────────────────────────── */
