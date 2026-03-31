@@ -407,7 +407,8 @@
 
   // Draw colored disks at grid-line crossing points of the slope line.
   // Each disk follows the mechanical word: blue = vertical crossing, green = horizontal.
-  // Domain: first closed quadrant only; left-closed, right-open (x < p).
+  // Domain: x >= 0 (first + second quadrant). Endpoint included.
+  // At lattice points: initial → blue, terminal → green.
   function drawWordDots(p, k) {
     if (p === 0 && k === 0) return;
     const word = computeMechanicalWord(p, k, currentOffset);
@@ -419,32 +420,47 @@
     const dotR = Math.min(cellW, cellH) * 0.15;
     const eps = 1e-9;
 
+    // Collect disc positions and colors from word crossings
+    const discs = [];
     let rx = 0, ry = 0;
     for (let i = 0; i < N; i++) {
-      let gx, gy;
-
+      let gx, gy, color;
       if (word[i] === -1) {
-        // Blue: crossing with vertical grid line x = rx (0-indexed)
         gx = rx;
         gy = p > 0 ? (k / p) * rx + currentOffset : currentOffset;
         rx++;
+        color = 'blue';
       } else {
-        // Green: crossing with horizontal grid line y = yEdge
         const yEdge = Math.ceil(currentOffset + eps) + ry;
         gx = k > 0 ? (yEdge - currentOffset) * p / k : 0;
         gy = yEdge;
         ry++;
+        color = 'green';
       }
+      discs.push({ gx, gy, color });
+    }
 
-      // First closed quadrant only
-      if (gy < -eps) continue;
-      // Right-open: exclude x = p (endpoint)
-      if (p > 0 && gx > p - eps) continue;
+    // Add endpoint (p, k+offset) as green if not already covered by last disc
+    const endX = p, endY = k + currentOffset;
+    const last = discs[discs.length - 1];
+    if (!last || Math.abs(last.gx - endX) > eps || Math.abs(last.gy - endY) > eps) {
+      discs.push({ gx: endX, gy: endY, color: 'green' });
+    } else {
+      last.color = 'green';
+    }
 
-      const px = gpx(gx);
-      const py = gpy(gy);
+    // At lattice points: initial → blue, terminal → green
+    const first = discs[0];
+    if (first && Math.abs(first.gy - Math.round(first.gy)) < eps) {
+      first.color = 'blue';
+    }
 
-      if (word[i] === -1) {
+    // Draw all discs
+    for (const d of discs) {
+      const px = gpx(d.gx);
+      const py = gpy(d.gy);
+
+      if (d.color === 'blue') {
         pickerCtx.fillStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.strokeStyle = "rgba(40, 80, 180, 1)";
       } else {
@@ -491,8 +507,8 @@
     if (!parents) {
       return word.map(v =>
         v === -1
-          ? '<span class="word-h">1</span>'
-          : '<span class="word-v">1</span>'
+          ? '<span class="word-nest-a"><span class="word-h">1</span></span>'
+          : '<span class="word-nest-b"><span class="word-v">1</span></span>'
       ).join('');
     }
 

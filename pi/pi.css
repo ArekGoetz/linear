@@ -279,6 +279,10 @@ html, body {
 
         & :is(.word-nest-a, .word-nest-b) {
           padding: 0.6em 0.77em;
+
+          & :is(.word-nest-a, .word-nest-b) {
+            padding: 0.7em 0.88em;
+          }
         }
       }
     }
