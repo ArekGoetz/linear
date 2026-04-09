@@ -243,8 +243,6 @@ html, body {
   line-height: 1.5;
   color: var(--text-dim);
   word-break: break-all;
-  max-height: 5em;
-  overflow-y: auto;
 }
 .word-h {
   color: rgba(30, 60, 160, 1);

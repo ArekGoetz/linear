@@ -405,61 +405,58 @@
     return { num: sign * bestNum, den: bestDen };
   }
 
-  // Draw colored disks at grid-line crossing points of the slope line.
-  // Each disk follows the mechanical word: blue = vertical crossing, green = horizontal.
-  // Domain: x >= 0 (first + second quadrant). Endpoint included.
-  // At lattice points: initial → blue, terminal → green.
-  function drawWordDots(p, k) {
-    if (p === 0 && k === 0) return;
-    const word = computeMechanicalWord(p, k, currentOffset);
-    const N = word.length;
-    if (N === 0) return;
+  // Effective start of slope line: intersection with nonneg axes.
+  // offset >= 0 → (0, offset) on y-axis; offset < 0 → (-offset*p/k, 0) on x-axis.
+  function slopeLineStart(p, k) {
+    if (currentOffset < -1e-9 && k > 0) {
+      return { x: -currentOffset * p / k, y: 0 };
+    }
+    return { x: 0, y: Math.max(0, currentOffset) };
+  }
 
+  // Draw colored disks at grid-line crossing points of the slope line.
+  // Exactly p+k = period discs: p blue (vertical crossings) + k green (horizontal).
+  // Half-open intervals [startX, startX+p) and [startY, startY+k).
+  // Initial lattice point forced blue.
+  function drawWordDots(p, k) {
+    if (p === 0) return;
     const cellW = pickerCanvas.width / currentGridN;
     const cellH = pickerCanvas.height / currentGridN;
     const dotR = Math.min(cellW, cellH) * 0.15;
     const eps = 1e-9;
 
-    // Collect disc positions and colors from word crossings
+    const s = slopeLineStart(p, k);
+
+    // p vertical crossings at integer x in [startX, startX+p)
     const discs = [];
-    let rx = 0, ry = 0;
-    for (let i = 0; i < N; i++) {
-      let gx, gy, color;
-      if (word[i] === -1) {
-        gx = rx;
-        gy = p > 0 ? (k / p) * rx + currentOffset : currentOffset;
-        rx++;
-        color = 'blue';
-      } else {
-        const yEdge = Math.ceil(currentOffset + eps) + ry;
-        gx = k > 0 ? (yEdge - currentOffset) * p / k : 0;
-        gy = yEdge;
-        ry++;
-        color = 'green';
+    const firstX = Math.abs(s.x - Math.round(s.x)) < eps
+      ? Math.round(s.x) : Math.ceil(s.x);
+    for (let x = firstX; x < s.x + p - eps; x++) {
+      discs.push({ gx: x, gy: (k / p) * x + currentOffset, color: 'blue' });
+    }
+
+    // k horizontal crossings at integer y in [startY, startY+k)
+    const firstY = Math.abs(s.y - Math.round(s.y)) < eps
+      ? Math.round(s.y) : Math.ceil(s.y);
+    for (let y = firstY; y < s.y + k - eps; y++) {
+      const x = k > 0 ? (y - currentOffset) * p / k : s.x;
+      discs.push({ gx: x, gy: y, color: 'green' });
+    }
+
+    // Sort by position along the line (by gx, blue before green at ties)
+    discs.sort((a, b) => (a.gx - b.gx) || (a.color === 'blue' ? -1 : 1));
+
+    // Force initial lattice point to blue
+    if (discs.length > 0) {
+      const f = discs[0];
+      if (Math.abs(f.gx - Math.round(f.gx)) < eps &&
+          Math.abs(f.gy - Math.round(f.gy)) < eps) {
+        f.color = 'blue';
       }
-      discs.push({ gx, gy, color });
-    }
-
-    // Add endpoint (p, k+offset) as green if not already covered by last disc
-    const endX = p, endY = k + currentOffset;
-    const last = discs[discs.length - 1];
-    if (!last || Math.abs(last.gx - endX) > eps || Math.abs(last.gy - endY) > eps) {
-      discs.push({ gx: endX, gy: endY, color: 'green' });
-    } else {
-      last.color = 'green';
-    }
-
-    // At lattice points: initial → blue, terminal → green
-    const first = discs[0];
-    if (first && Math.abs(first.gy - Math.round(first.gy)) < eps) {
-      first.color = 'blue';
     }
 
     // Draw all discs
     for (const d of discs) {
-      const px = gpx(d.gx);
-      const py = gpy(d.gy);
-
       if (d.color === 'blue') {
         pickerCtx.fillStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.strokeStyle = "rgba(40, 80, 180, 1)";
@@ -469,7 +466,7 @@
       }
       pickerCtx.lineWidth = 1.5;
       pickerCtx.beginPath();
-      pickerCtx.arc(px, py, dotR, 0, 2 * Math.PI);
+      pickerCtx.arc(gpx(d.gx), gpy(d.gy), dotR, 0, 2 * Math.PI);
       pickerCtx.fill();
       pickerCtx.stroke();
     }
@@ -548,9 +545,10 @@
       return;
     }
 
+    const s = slopeLineStart(p, k);
     pickerCtx.beginPath();
-    pickerCtx.moveTo(gpx(0), gpy(currentOffset));
-    pickerCtx.lineTo(gpx(p), gpy(k + currentOffset));
+    pickerCtx.moveTo(gpx(s.x), gpy(s.y));
+    pickerCtx.lineTo(gpx(s.x + p), gpy(s.y + k));
     pickerCtx.stroke();
   }
 
