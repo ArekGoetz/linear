@@ -26,7 +26,7 @@ Fan lines from center to each root, horizontal real-axis line, unit circle strok
 - Thumb color: `data-parity` attribute set to "even"/"odd"/"frac", drives CSS background via attribute selectors. Thumb backgrounds: gray (odd), gold (even), muted (frac).
 
 **Four sliders**:
-1. **cycle** (2–32, step 1): Sets n for roots of unity. Changes picker grid to (2n+1)×(2n+1), locks initial vertex at (p=n, k=1).
+1. **cycle** (2–32, step 1, initial 8): Sets n for roots of unity. Changes picker grid to (2n+1)×(2n+1), locks initial vertex at (p=n, k=1).
 2. **offset** (−1 to 1, step 0.01): Phase shift for mechanical word. Keyboard steps through exact fractions with denominator ≤ 2·cycle. Magnetic snap on drag release via `close_frac` (Stern-Brocot mediant search), tolerance 0.03. Thumb shows fraction notation.
 3. **sum length** (1 to 2·cycle, step 1): L for partial Fourier sum.
 4. **cyclotomic lattice** (0–2, step 1): Controls `maxCoeff` for lattice dot enumeration (capped at 10000 points).
@@ -47,19 +47,18 @@ Square canvas (`#picker_canvas`, aspect-ratio 1) in a `.picker-box`. Grid of (2�
 
 **Coprime vertex interaction**: `nearestCoprimeVertex` maps mouse to nearest grid vertex with gcd=1 within ½-cell radius. Hover draws overlay + tooltip (fraction k/p in vertical-fraction HTML). Click locks the vertex → updates slope display, mechanical word, and redraws the unity clock.
 
-**Slope line**: White 1px line from (0, offset) to (p, k+offset). For p=0, draws vertical line at x=0.
+**Slope line**: White 1px line with length preserving the full period segment (p horizontal, k vertical). Starting point computed by `slopeLineStart(p, k)`: if offset ≥ 0, starts at (0, offset); if offset < 0, starts at (−offset·p/k, 0) — i.e., intersection with the nonnegative axes. Endpoint is (startX+p, startY+k). For p=0, draws vertical line at x=0.
 
 **Parallelogram**: Farey parents of k/p give vertices (0,off), (b,a+off), (p,k+off), (d,c+off). Filled at 5% white, stroked at 12%. Farey parents computed via extended GCD: find b such that b·k ≡ 1 (mod p), then a = (b·k−1)/p, c = k−a, d = p−b.
 
 ### Word Dots on the Slope Line
 
-Filled discs (radius = 0.15 × cell size) with dark borders, placed at **grid-line crossing points** of the slope line y = (k/p)x + offset:
+Filled discs (radius = 0.15 × cell size) with dark borders, placed at **grid-line crossing points** of the slope line starting from `slopeLineStart(p, k)`:
 
-- **Blue disc** (vertical crossing): at (rx, (k/p)·rx + offset) for rx = 0, 1, …, p−1
-- **Green disc** (horizontal crossing): at ((yEdge−offset)·p/k, yEdge) where yEdge = ⌈offset⌉ + ry
-- **Endpoint**: always included at (p, k+offset), forced green. If the last word-generated disc already covers it, recolor that disc green.
-- **Initial lattice point**: if the first disc has integer y-coordinate, forced blue.
-- **Domain**: x ≥ 0, any y (first and second quadrant). No y<0 filter.
+- **Blue disc** (vertical crossing): p discs at integer x values in half-open interval [startX, startX+p). Position: (x, (k/p)·x + offset).
+- **Green disc** (horizontal crossing): k discs at integer y values in half-open interval [startY, startY+k). Position: ((y−offset)·p/k, y).
+- **Total discs**: always exactly p+k = period.
+- **Initial lattice point**: if the first disc (sorted by x) sits on a lattice point, forced blue.
 - Colors: blue fill rgba(80,140,255,0.85) / stroke rgba(40,80,180), green fill rgba(80,220,80,0.85) / stroke rgba(30,130,30).
 
 ### Mechanical Word
@@ -70,7 +69,7 @@ Filled discs (radius = 0.15 × cell size) with dark borders, placed at **grid-li
 
 ## Mechanical Word Display CSS
 
-`.word-display`: 0.6em font, tabular-nums, break-all, max-height 5em scrollable.
+`.word-display`: 0.6em font, tabular-nums, break-all, dynamically sized (no max-height or scroll).
 
 **Leaf digit spans**:
 - `.word-h` (blue/horizontal): dark blue (#1E3CA0), bold 700, overline decoration
