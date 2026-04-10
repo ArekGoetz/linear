@@ -206,6 +206,23 @@ html, body {
   transform: translate(-50%, -120%);
 }
 
+#offset_tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  padding: 0.2em 0.45em;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #111113;
+  font-weight: 600;
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.18s;
+  transform: translate(-110%, -50%);
+}
+
 .vfrac {
   display: inline-flex;
   flex-direction: column;

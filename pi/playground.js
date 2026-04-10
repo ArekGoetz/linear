@@ -1081,15 +1081,32 @@
   }
 
   function updateOffsetRange() {
-    if (!offsetSlider || !lockedVertex) return;
-    const k = lockedVertex.k;
-    const p = lockedVertex.p;
-    const period = k + p;
-    offsetSlider.setMin(-k / period);
-    offsetSlider.setMax(p / period);
+    if (!offsetSlider) return;
+    offsetSlider.setMin(0);
+    offsetSlider.setMax(0.99);
     offsetSlider.step = 0.01;
     currentOffset = offsetSlider.displayValue;
     updateOffsetThumb();
+  }
+
+  const offsetTooltip = document.getElementById("offset_tooltip");
+  let _offsetTipTimer = null;
+
+  function showOffsetTooltip() {
+    if (!offsetTooltip || !pickerCanvas) return;
+    const rect = pickerCanvas.getBoundingClientRect();
+    if (rect.width === 0) return;
+    // Intersection of slope line with y-axis is always at (0, currentOffset) since offset ≥ 0
+    const sx = rect.left + gpx(0);
+    const sy = rect.top + gpy(currentOffset);
+    offsetTooltip.style.left = sx + "px";
+    offsetTooltip.style.top = sy + "px";
+    const maxDen = cycle ? 2 * cycle.displayValue : 20;
+    const f = close_frac(currentOffset, maxDen);
+    offsetTooltip.textContent = f.den === 1 ? String(f.num) : f.num + "/" + f.den;
+    offsetTooltip.style.opacity = "1";
+    if (_offsetTipTimer) clearTimeout(_offsetTipTimer);
+    _offsetTipTimer = setTimeout(() => { offsetTooltip.style.opacity = "0"; }, 1200);
   }
 
   if (offsetSlider) {
@@ -1097,6 +1114,7 @@
     offsetSlider.onChange = (v) => {
       currentOffset = v;
       updateOffsetThumb();
+      showOffsetTooltip();
       if (lockedVertex) {
         updateSlopeAndWord(lockedVertex.k, lockedVertex.p);
       }
