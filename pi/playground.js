@@ -490,18 +490,18 @@
     }
   }
 
-  // Mechanical word via standard floor formula.
-  // slope = k/p, period = k+p, density t = k/(k+p).
-  // s_j = floor(j*t + offset) - floor((j-1)*t + offset), j=1..period
-  // s_j=1 → green(+1), s_j=0 → blue(-1).
+  // Mechanical word from geometric crossing order of slope line y = (k/p)x + offset.
+  // For each integer x = 0..p-1, emit blue (vertical crossing), then
+  // floor((x+1)*k/p + offset) - floor(x*k/p + offset) greens (horizontal crossings).
+  // Always produces exactly p blues + k greens = period.
   function computeMechanicalWord(p, k, offset) {
     if (p === 0 && k === 0) return [];
-    const period = k + p;
-    const t = k / period;
+    if (p === 0) return Array(k).fill(1);
     const word = [];
-    for (let j = 1; j <= period; j++) {
-      const s = Math.floor(j * t + offset) - Math.floor((j - 1) * t + offset);
-      word.push(s === 1 ? 1 : -1);
+    for (let n = 0; n < p; n++) {
+      word.push(-1);
+      const h = Math.floor((n + 1) * k / p + offset) - Math.floor(n * k / p + offset);
+      for (let i = 0; i < h; i++) word.push(1);
     }
     return word;
   }
@@ -1081,12 +1081,12 @@
   }
 
   function updateOffsetRange() {
-    if (!offsetSlider || !lockedVertex || !cycle) return;
+    if (!offsetSlider || !lockedVertex) return;
     const k = lockedVertex.k;
     const p = lockedVertex.p;
-    const n = cycle.displayValue;
-    offsetSlider.setMin(-k / n);
-    offsetSlider.setMax(p / n);
+    const period = k + p;
+    offsetSlider.setMin(-k / period);
+    offsetSlider.setMax(p / period);
     offsetSlider.step = 0.01;
     currentOffset = offsetSlider.displayValue;
     updateOffsetThumb();
