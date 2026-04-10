@@ -1096,11 +1096,11 @@
     if (!offsetTooltip || !pickerCanvas) return;
     const rect = pickerCanvas.getBoundingClientRect();
     if (rect.width === 0) return;
-    // Intersection of slope line with y-axis is always at (0, currentOffset) since offset ≥ 0
-    const sx = rect.left + gpx(0);
-    const sy = rect.top + gpy(currentOffset);
-    offsetTooltip.style.left = sx + "px";
-    offsetTooltip.style.top = sy + "px";
+    const n = currentGridN;
+    const px = (0 + 1) * (rect.width / n);
+    const py = (n - 1 - currentOffset) * (rect.height / n);
+    offsetTooltip.style.left = (rect.left + px) + "px";
+    offsetTooltip.style.top = (rect.top + py) + "px";
     const maxDen = cycle ? 2 * cycle.displayValue : 20;
     const f = close_frac(currentOffset, maxDen);
     offsetTooltip.textContent = f.den === 1 ? String(f.num) : f.num + "/" + f.den;
