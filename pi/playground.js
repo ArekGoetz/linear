@@ -455,37 +455,37 @@
       }
     }
 
-    // Draw all discs
+    // Draw all ellipses (blue: vertical semimajor, green: horizontal semimajor, 1:2 ratio)
     for (const d of discs) {
+      let rx, ry;
       if (d.color === 'blue') {
         pickerCtx.fillStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.strokeStyle = "rgba(40, 80, 180, 1)";
+        rx = dotR; ry = dotR * 2;
       } else {
         pickerCtx.fillStyle = "rgba(80, 220, 80, 0.85)";
         pickerCtx.strokeStyle = "rgba(30, 130, 30, 1)";
+        rx = dotR * 2; ry = dotR;
       }
       pickerCtx.lineWidth = 1.5;
       pickerCtx.beginPath();
-      pickerCtx.arc(gpx(d.gx), gpy(d.gy), dotR, 0, 2 * Math.PI);
+      pickerCtx.ellipse(gpx(d.gx), gpy(d.gy), rx, ry, 0, 0, 2 * Math.PI);
       pickerCtx.fill();
       pickerCtx.stroke();
     }
   }
 
   // Mechanical word via standard floor formula.
-  // slope = k/p, period = k+p, density of green(+1) steps = k/period.
-  // s_j = floor((j+c) * k/period) - floor((j-1+c) * k/period), j=1..period
-  // where c = offset/period is the fractional phase shift.
+  // slope = k/p, period = k+p, density t = k/(k+p).
+  // s_j = floor(j*t + offset) - floor((j-1)*t + offset), j=1..period
   // s_j=1 → green(+1), s_j=0 → blue(-1).
   function computeMechanicalWord(p, k, offset) {
     if (p === 0 && k === 0) return [];
     const period = k + p;
     const t = k / period;
-    const c = offset / period;
     const word = [];
     for (let j = 1; j <= period; j++) {
-      const ij = j + c;
-      const s = Math.floor(ij * t) - Math.floor((ij - 1) * t);
+      const s = Math.floor(j * t + offset) - Math.floor((j - 1) * t + offset);
       word.push(s === 1 ? 1 : -1);
     }
     return word;
@@ -704,6 +704,7 @@
     );
     if (hit) {
       lockedVertex = hit;
+      updateOffsetRange();
       updateSlopeAndWord(hit.k, hit.p);
       drawMechanicalPicker();
     }
@@ -917,6 +918,14 @@
       this._update();
     }
 
+    setMin(newMin) {
+      this.min = newMin;
+      this.el.dataset.min = newMin;
+      this.el.setAttribute("aria-valuemin", newMin);
+      if (this._value < newMin) this._value = newMin;
+      this._update();
+    }
+
     setMax(newMax) {
       this.max = newMax;
       this.el.dataset.max = newMax;
@@ -1056,6 +1065,18 @@
       f.den === 1 ? String(f.num) : f.num + "/" + f.den;
   }
 
+  function updateOffsetRange() {
+    if (!offsetSlider || !lockedVertex || !cycle) return;
+    const k = lockedVertex.k;
+    const p = lockedVertex.p;
+    const n = cycle.displayValue;
+    offsetSlider.setMin(-k / n);
+    offsetSlider.setMax(p / n);
+    offsetSlider.step = 0.01;
+    currentOffset = offsetSlider.displayValue;
+    updateOffsetThumb();
+  }
+
   if (offsetSlider) {
     currentOffset = offsetSlider.displayValue;
     offsetSlider.onChange = (v) => {
@@ -1138,8 +1159,8 @@
     setPickerGridSize(2 * cv + 1);
     drawUnityClock();
     lockedVertex = { p: cv, k: 1, vx: 0, vy: 0 };
+    updateOffsetRange();
     updateSlopeAndWord(1, cv);
-    updateOffsetThumb();
     drawMechanicalPicker();
 
     if (length) {
@@ -1158,8 +1179,8 @@
       setPickerGridSize(2 * cycleVal + 1);
       drawUnityClock();
       lockedVertex = { p: cycleVal, k: 1, vx: 0, vy: 0 };
+      updateOffsetRange();
       updateSlopeAndWord(1, cycleVal);
-      updateOffsetThumb();
       drawMechanicalPicker();
       if (length) {
         length.setMax(2 * cycleVal);
