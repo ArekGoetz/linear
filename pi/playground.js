@@ -414,15 +414,16 @@
     return { x: 0, y: Math.max(0, currentOffset) };
   }
 
-  // Draw colored disks at grid-line crossing points of the slope line.
-  // Exactly p+k = period discs: p blue (vertical crossings) + k green (horizontal).
+  // Draw colored markers at grid-line crossing points of the slope line.
+  // Exactly p+k = period markers: p blue (vertical crossings) + k green (horizontal).
   // Half-open intervals [startX, startX+p) and [startY, startY+k).
   // Initial lattice point forced blue.
+  // When offset≈0, green at origin is relocated to slope line endpoint.
   function drawWordDots(p, k) {
     if (p === 0) return;
     const cellW = pickerCanvas.width / currentGridN;
     const cellH = pickerCanvas.height / currentGridN;
-    const dotR = Math.min(cellW, cellH) * 0.15;
+    const dotR = Math.min(cellW, cellH) * 0.10;
     const eps = 1e-9;
 
     const s = slopeLineStart(p, k);
@@ -455,21 +456,35 @@
       }
     }
 
-    // Draw all ellipses (blue: vertical semimajor, green: horizontal semimajor, 1:2 ratio)
+    // When offset≈0, relocate green at origin to the slope line endpoint
+    if (Math.abs(currentOffset) < eps) {
+      for (const d of discs) {
+        if (d.color === 'green' &&
+            Math.abs(d.gx) < eps && Math.abs(d.gy) < eps) {
+          d.gx = s.x + p;
+          d.gy = s.y + k;
+          break;
+        }
+      }
+    }
+
+    // Draw all markers as rounded rectangles (blue: vertical, green: horizontal, 1:2 ratio)
     for (const d of discs) {
-      let rx, ry;
+      let w, h;
       if (d.color === 'blue') {
         pickerCtx.fillStyle = "rgba(80, 140, 255, 0.85)";
         pickerCtx.strokeStyle = "rgba(40, 80, 180, 1)";
-        rx = dotR; ry = dotR * 2;
+        w = dotR; h = dotR * 2;
       } else {
         pickerCtx.fillStyle = "rgba(80, 220, 80, 0.85)";
         pickerCtx.strokeStyle = "rgba(30, 130, 30, 1)";
-        rx = dotR * 2; ry = dotR;
+        w = dotR * 2; h = dotR;
       }
+      const cx = gpx(d.gx), cy = gpy(d.gy);
+      const r = Math.min(w, h) * 0.35;
       pickerCtx.lineWidth = 1.5;
       pickerCtx.beginPath();
-      pickerCtx.ellipse(gpx(d.gx), gpy(d.gy), rx, ry, 0, 0, 2 * Math.PI);
+      pickerCtx.roundRect(cx - w, cy - h, w * 2, h * 2, r);
       pickerCtx.fill();
       pickerCtx.stroke();
     }
