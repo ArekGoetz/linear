@@ -1,6 +1,6 @@
 # Pi Playground — Compact Reproducing Specification
 
-Single-page app: `button.html` loads `pi.css` + `playground.js`. Dark theme (#111113 bg). Three-panel layout: left panel (MathJax formula), full-screen canvas (center), right panel (sliders + mechanical picker).
+Single-page app: `fsum.html` loads `pi.css` + `playground.js`. Dark theme (#111113 bg). Three-panel layout: left panel (MathJax formula), full-screen canvas (center), right panel (sliders + mechanical picker).
 
 ## Layout
 
@@ -108,13 +108,13 @@ Dark theme variables in `:root`. System font stack. Full reset (`box-sizing: bor
 
 ```
 pi/
-  button.html  — Single page: playground div + 4 sliders + picker + left formula panel
+  fsum.html  — Single page: playground div + 4 sliders + picker + left formula panel
   pi.css       — All styles (~420 lines)
   playground.js — All logic (~1170 lines, single IIFE)
-  index.html   — Nav page linking to button.html
+  index.html   — Nav page linking to fsum.html
 ```
 
-## HTML Structure (button.html)
+## HTML Structure (fsum.html)
 
 ```html
 #playground

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Linear Algebra</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111113;
+      --surface: rgba(42, 42, 48, 0.90);
+      --text: rgb(248, 248, 248);
+      --text-dim: rgb(220, 220, 220);
+      --accent: rgb(160, 180, 220);
+    }
+    body {
+      font-family: -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 520px;
+      margin: 60px auto;
+      padding: 0 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+    .subtitle { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 32px; }
+    ul { list-style: none; padding: 0; }
+    li { margin-bottom: 16px; }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    a:hover, a:focus-visible { text-decoration: underline; outline-offset: 3px; }
+    .desc { color: var(--text-dim); font-size: 0.83rem; margin-top: 3px; }
+    .back { display: inline-block; margin-bottom: 28px; font-size: 0.85rem; color: var(--text-dim); text-decoration: none; }
+    .back:hover, .back:focus-visible { color: var(--text); text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <a href="../" class="back">← home</a>
+  <h1>Linear Algebra</h1>
+  <p class="subtitle">Interactive visualizations of linear and complex-plane concepts.</p>
+  <ul>
+    <li>
+      <a href="FourierClock.html">FourierClock</a>
+      <div class="desc">Direct regular polygon component sum in C^n.</div>
+    </li>
+    <li>
+      <a href="2d.html">2d</a>
+      <div class="desc">Change of basis — interactive 2D linear transformation.</div>
+    </li>
+  </ul>
+</body>
+</html>

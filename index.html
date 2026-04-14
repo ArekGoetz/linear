@@ -1,30 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>linear</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; color: #222; }
-        h1 { font-size: 1.4rem; margin-bottom: 24px; }
-        ul { list-style: none; padding: 0; }
-        li { margin-bottom: 12px; }
-        a { color: #0066cc; text-decoration: none; font-size: 1rem; }
-        a:hover { text-decoration: underline; }
-        .desc { color: #666; font-size: 0.85rem; margin-top: 2px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Math Visualizations</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111113;
+      --surface: rgba(42, 42, 48, 0.90);
+      --text: rgb(248, 248, 248);
+      --text-dim: rgb(220, 220, 220);
+    }
+    body {
+      font-family: -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 520px;
+      margin: 60px auto;
+      padding: 0 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+    .subtitle { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 36px; }
+    nav ul { list-style: none; padding: 0; margin: 0; }
+    nav li { margin-bottom: 20px; }
+    nav a {
+      font-size: 1.05rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    nav a:hover, nav a:focus-visible {
+      text-decoration: underline;
+      outline-offset: 3px;
+    }
+    .section-linear a { color: rgb(160, 180, 220); }
+    .section-pi      a { color: rgb(200, 160, 220); }
+    .section-real    a { color: rgb(160, 200, 170); }
+    .desc { color: var(--text-dim); font-size: 0.83rem; margin-top: 3px; }
+  </style>
 </head>
 <body>
-    <h1>linear</h1>
+  <h1>Math Visualizations</h1>
+  <p class="subtitle">Interactive explorations of linear algebra, Fourier analysis, and real analysis.</p>
+  <nav aria-label="Sections">
     <ul>
-        <li>
-            <a href="FourierClock.html">FourierClock.html</a>
-            <div class="desc">Direct regular polygon component sum in C^n.</div>
-        </li>
-        <li>
-            <a href="2d.html">2d.html</a>
-            <div class="desc">Change of Basis</div>
-        </li>
+      <li class="section-linear">
+        <a href="linear/">Linear Algebra</a>
+        <div class="desc">Change of basis, Fourier polygon sums in C^n.</div>
+      </li>
+      <li class="section-pi">
+        <a href="pi/fsum.html">Pi Playground</a>
+        <div class="desc">Roots of unity, cyclotomic lattices, mechanical words.</div>
+      </li>
+      <li class="section-real">
+        <a href="real/">Real Analysis</a>
+        <div class="desc">Coming soon — interactive real analysis visualizations.</div>
+      </li>
     </ul>
+  </nav>
 </body>
 </html>
