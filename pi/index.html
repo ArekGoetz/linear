@@ -2,13 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Pi</title>
-  <link rel="stylesheet" href="pi.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pi Playground</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111113;
+      --text: rgb(248, 248, 248);
+      --text-dim: rgb(220, 220, 220);
+      --accent: rgb(200, 160, 220);
+    }
+    body {
+      font-family: -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 520px;
+      margin: 60px auto;
+      padding: 0 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+    .subtitle { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 32px; }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    a:hover, a:focus-visible { text-decoration: underline; outline-offset: 3px; }
+    .desc { color: var(--text-dim); font-size: 0.83rem; margin-top: 3px; }
+    .back { display: inline-block; margin-bottom: 28px; font-size: 0.85rem; color: var(--text-dim); text-decoration: none; }
+    .back:hover, .back:focus-visible { color: var(--text); text-decoration: underline; }
+  </style>
 </head>
 <body>
-  <nav>
-    <a href="fsum.html">Fourier Sum</a>
-  </nav>
+  <a href="/" class="back">← home</a>
+  <h1>Pi Playground</h1>
+  <p class="subtitle">Roots of unity, cyclotomic lattices, and mechanical words.</p>
+  <a href="fsum.html">Launch Fourier Sum Playground →</a>
 </body>
 </html>
