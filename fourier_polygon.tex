@@ -1,0 +1,119 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.8cm, top=1.5cm, bottom=1.5cm]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\newtheorem*{theorem}{Theorem}
+
+\title{\textbf{Any Polygon Is a Sum of Regular Polygons}\\[4pt]
+       \large A note on the Fourier decomposition in $\mathbb{C}^n$}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+\vspace{-1em}
+
+\subsection*{1.\enspace A polygon as a vector}
+
+Label $n$ equally spaced moments in time $0, 1, \ldots, n{-}1$ and record a
+complex number $z_j \in \mathbb{C}$ at each one.
+The list
+\[
+  \mathbf{z} = (z_0,\, z_1,\, \ldots,\, z_{n-1}) \;\in\; \mathbb{C}^n
+\]
+is both a vector in an $n$-dimensional complex space \emph{and} a polygon:
+connect the dots $z_0 \to z_1 \to \cdots \to z_{n-1} \to z_0$ in the plane.
+Every choice of $n$ vertices gives a different polygon, so polygons and
+vectors in $\mathbb{C}^n$ are the same thing.
+
+\subsection*{2.\enspace The regular polygons — a special basis}
+
+Fix a primitive $n$-th root of unity $\omega = e^{2\pi i/n}$.
+For each frequency $k = 0, 1, \ldots, n{-}1$ define the vector
+\[
+  \mathbf{e}_k
+  \;=\;
+  \bigl(1,\; \omega^k,\; \omega^{2k},\; \ldots,\; \omega^{(n-1)k}\bigr).
+\]
+The $j$-th vertex of $\mathbf{e}_k$ is $\omega^{jk}$, a point on the unit
+circle at angle $\tfrac{2\pi jk}{n}$.
+Consecutive vertices are separated by the same angle, so \emph{$\mathbf{e}_k$
+is a regular polygon} (or a star polygon when $k > 1$, tracing the $n$
+vertices of a regular $n$-gon in steps of $k$).
+
+The $n$ vectors $\mathbf{e}_0, \mathbf{e}_1, \ldots, \mathbf{e}_{n-1}$ are
+mutually orthogonal under the standard inner product on $\mathbb{C}^n$:
+\[
+  \langle \mathbf{e}_j,\, \mathbf{e}_k \rangle
+  = \sum_{m=0}^{n-1} \omega^{mj}\,\overline{\omega^{mk}}
+  = \sum_{m=0}^{n-1} \omega^{m(j-k)}
+  = \begin{cases} n & j = k, \\ 0 & j \neq k. \end{cases}
+\]
+They therefore form an \textbf{orthogonal basis} of $\mathbb{C}^n$ —
+the \emph{Fourier basis}.
+
+\subsection*{3.\enspace Every polygon splits uniquely into regular polygons}
+
+Because $\{\mathbf{e}_k\}$ is a basis, any polygon $\mathbf{z} \in \mathbb{C}^n$
+expands uniquely as
+\[
+  \mathbf{z}
+  \;=\;
+  \sum_{k=0}^{n-1} \hat{z}_k\, \mathbf{e}_k,
+  \qquad
+  \hat{z}_k
+  \;=\;
+  \frac{\langle \mathbf{z},\, \mathbf{e}_k \rangle}{n}
+  \;=\;
+  \frac{1}{n}\sum_{j=0}^{n-1} z_j\, \omega^{-jk}.
+\]
+The scalar $\hat{z}_k \in \mathbb{C}$ is the \textbf{$k$-th Fourier
+coefficient}.  The term $\hat{z}_k\,\mathbf{e}_k$ is a scaled and rotated
+copy of the regular polygon $\mathbf{e}_k$: multiplying by $\hat{z}_k$ scales
+every vertex by $|\hat{z}_k|$ and rotates the whole polygon by $\arg(\hat{z}_k)$.
+The formula above is the \textbf{Discrete Fourier Transform} (DFT).
+
+\begin{theorem}
+Every polygon with $n$ vertices can be written in exactly one way as a sum
+of $n$ regular polygons (one per frequency $k = 0, \ldots, n{-}1$).
+The $k$-th summand is the orthogonal projection of the polygon onto the
+frequency-$k$ direction.
+\end{theorem}
+
+\subsection*{4.\enspace What the applet shows}
+
+The applet lets you set the number of vertices $n$ and an exponent $k$.
+It draws the regular polygon $\mathbf{e}_k$ — the $k$-th basis vector — as
+its starting configuration.
+The \emph{exp} control changes $k$, cycling through the basis elements:
+
+\begin{itemize}
+  \item $k = 1$: the standard regular $n$-gon, vertices at
+        $1, \omega, \omega^2, \ldots$ in order.
+  \item $k = 2, 3, \ldots$: the same $n$ points visited in larger steps,
+        producing star shapes when $\gcd(k, n) = 1$, or a
+        smaller repeated polygon when $\gcd(k,n) > 1$.
+  \item $k = 0$: all $n$ vertices collapse to $1$ (zero-frequency, the
+        ``DC'' term representing the centroid).
+\end{itemize}
+
+The physics simulation then perturbs the shape and lets it oscillate,
+giving intuition for how a rigid regular polygon resists deformation — and
+how any deformed polygon can be understood as a superposition of these
+pure-frequency shapes vibrating independently.
+
+\vfill
+\noindent\rule{\linewidth}{0.4pt}\\[2pt]
+{\small
+$\mathbb{C}^n$ is a complex vector space of dimension $n$.
+$\omega = e^{2\pi i/n}$ satisfies $\omega^n = 1$ and $\omega^j \neq 1$ for
+$0 < j < n$.
+The DFT matrix $F$ with $F_{jk} = \omega^{jk}$ is unitary up to the factor
+$1/\sqrt{n}$; its columns are exactly $\mathbf{e}_0, \ldots, \mathbf{e}_{n-1}$.}
+
+\end{document}
